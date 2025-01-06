@@ -476,7 +476,7 @@ async function processRows() {
 setInterval(() => {
   console.log('Checking for updates...');
   processRows();
-}, 10000); // Runs every 10 seconds
+}, 30000); // Runs every 10 seconds
 
 
 const PORT = process.env.PORT || 6000;
