@@ -423,6 +423,178 @@ async function processRefundRequests() {
 setInterval(processRefundRequests, 50000);
 setInterval(processPaymentStatusChanges, 50000);
 
+async function getCancelledWithoutRefundRecords() {
+    try {
+        const response = await axios.get(airtableUrl, {
+            headers: {
+                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            },
+        });
+
+        const records = response.data.records.filter(record => {
+            const paymentStatus = record.fields['Payment Status'];
+            const refundConfirmation = record.fields['Refund Confirmation'];
+
+            return paymentStatus === 'Cancelled Without Refund' && refundConfirmation === 'Confirmed';
+        });
+
+        return records;
+    } catch (error) {
+        console.error(`Error fetching Airtable records: ${error.response?.data || error.message}`);
+        return [];
+    }
+}
+
+async function updateAirtableRecord(recordId, updatedFields) {
+    try {
+        console.log(`Updating record: ${recordId} with fields:`, updatedFields);
+        const response = await axios.patch(`${airtableUrl}/${recordId}`, {
+            fields: updatedFields,
+        }, {
+            headers: {
+                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            },
+        });
+
+        console.log(`Updated Airtable record: ${recordId}`);
+    } catch (error) {
+        console.error(`Error updating Airtable: ${JSON.stringify(error.response?.data || error.message)}`);
+    }
+}
+
+async function retrieveClassRecord(classId) {
+    try {
+        const classRecords = await airtableBase("Biaw Classes")
+            .select({
+                filterByFormula: `{Field ID} = '${classId}'`,
+                maxRecords: 1,
+            })
+            .firstPage();
+
+        if (classRecords.length === 0) {
+            console.log(`Class record not found in Biaw Classes table for ID: ${classId}.`);
+            return null;
+        }
+
+        console.log(`Class record found for ID: ${classId}.`);
+        return classRecords[0];
+    } catch (error) {
+        console.error(`Error fetching class record: ${error.message}`);
+        console.log(classId);
+
+        return null;
+    }
+}
+
+async function updateClassSeatCounts(seatsToAdjust, classId) {
+    try {
+        const classRecord = await retrieveClassRecord(classId);
+
+        if (classRecord) {
+            const currentRemainingSeats = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
+            const currentTotalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'], 10) || 0;
+
+            const updatedRemainingSeats = (currentRemainingSeats + seatsToAdjust).toString();
+            const updatedTotalSeats = (currentTotalPurchasedSeats - seatsToAdjust).toString();
+
+            console.log('Updating Biaw Classes:', {
+                'Number of seats remaining': updatedRemainingSeats,
+                'Total Number of Purchased Seats': updatedTotalSeats,
+            });
+
+            await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+                fields: {
+                    'Number of seats remaining': updatedRemainingSeats,
+                    'Total Number of Purchased Seats': updatedTotalSeats,
+                },
+            }, {
+                headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+            });
+
+            console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+        }
+    } catch (error) {
+        console.error(`Error updating Biaw Classes: ${JSON.stringify(error.response?.data || error.message)}`);
+    }
+}
+
+async function handlePaymentStatusUpdates() {
+    try {
+        const response = await axios.get(airtableUrl, {
+            headers: {
+                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            },
+        });
+
+        const records = response.data.records.filter(record => {
+            const refundConfirmation = record.fields['Refund Confirmation'];
+            const paymentStatus = record.fields['Payment Status'];
+
+            if (refundConfirmation === 'Confirmed' || refundConfirmation === 'Cancellation Revoked') {
+                return false;
+            }
+
+            return paymentStatus === 'Cancelled Without Refund';
+        });
+
+        for (const record of records) {
+            await updateAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
+        }
+    } catch (error) {
+        console.error(`Error handling Payment Status updates: ${JSON.stringify(error.response?.data || error.message)}`);
+    }
+}
+
+async function updateLinkedClassPaymentStatus(recordId, newStatus) {
+    try {
+        const recordResponse = await axios.get(`${airtableUrl}/${recordId}`, {
+            headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+  
+        const linkedClassIds = recordResponse.data.fields["Multiple Class Registration"] || [];
+  
+        for (const classId of linkedClassIds) {
+            const classUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${classId}`;
+  
+            await axios.patch(
+                classUrl,
+                {
+                    fields: {
+                        "Payment Status": newStatus,
+                    },
+                },
+                { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
+            );
+  
+            console.log(`Updated Payment Status for Multiple Class Registration ID: ${classId}`);
+        }
+    } catch (error) {
+        console.error(`Error updating "Payment Status" for linked records: ${error.message}`);
+    }
+}
+
+async function processRefunds() {
+    const refundRequests = await getCancelledWithoutRefundRecords();
+
+    for (const record of refundRequests) {
+        const classFieldValue = record.fields['Airtable id'];
+        const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
+
+        await updateAirtableRecord(record.id, {
+            'Refund Confirmation': 'Confirmed',
+            'Payment Status': 'Cancelled Without Refund',
+            'Number of seat Purchased': 0,
+        });
+
+        await updateClassSeatCounts(seatsPurchased, classFieldValue);
+        await updateLinkedClassPaymentStatus(record.id, 'Cancelled Without Refund');
+    }
+}
+
+setInterval(processRefunds, 50000);
+setInterval(handlePaymentStatusUpdates, 50000);
+
+
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 
 // Function to process and update rows
