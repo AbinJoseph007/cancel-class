@@ -243,8 +243,18 @@ async function handleRefunds() {
 
 
 
-setInterval(handleRefunds, 50000);
-setInterval(handlePaymentStatusUpdates, 50000);
+async function runPeriodically(task, intervalMs) {
+    console.log("Starting periodic task handleRefunds...");
+    setInterval(async () => {
+        console.log(`Running task at ${new Date().toISOString()}`);
+        await task();
+    }, intervalMs);
+}
+
+// Update the periodic calls
+runPeriodically(handleRefunds, 50000);
+runPeriodically(handlePaymentStatusUpdates, 50000);
+
 
 
 // Function to fetch records from Airtable
@@ -420,10 +430,21 @@ async function processRefundRequests() {
     }
 }
 
-setInterval(processRefundRequests, 50000);
-setInterval(processPaymentStatusChanges, 50000);
 
-async function getCancelledWithoutRefundRecords() {
+async function runPeriodically1(task, intervalMs) {
+    console.log("Starting periodic task processRefundRequests...");
+    setInterval(async () => {
+        console.log(`Running task at ${new Date().toISOString()}`);
+        await task();
+    }, intervalMs);
+}
+
+// Update the periodic calls
+runPeriodically1(processRefundRequests, 50000);
+runPeriodically1(processPaymentStatusChanges, 50000);
+
+
+async function getNonRefundedCancellations() {
     try {
         const response = await axios.get(airtableUrl, {
             headers: {
@@ -445,7 +466,7 @@ async function getCancelledWithoutRefundRecords() {
     }
 }
 
-async function updateAirtableRecord(recordId, updatedFields) {
+async function amendAirtableRecord(recordId, updatedFields) {
     try {
         console.log(`Updating record: ${recordId} with fields:`, updatedFields);
         const response = await axios.patch(`${airtableUrl}/${recordId}`, {
@@ -462,7 +483,7 @@ async function updateAirtableRecord(recordId, updatedFields) {
     }
 }
 
-async function retrieveClassRecord(classId) {
+async function getClassDetails(classId) {
     try {
         const classRecords = await airtableBase("Biaw Classes")
             .select({
@@ -486,9 +507,9 @@ async function retrieveClassRecord(classId) {
     }
 }
 
-async function updateClassSeatCounts(seatsToAdjust, classId) {
+async function updateSeatsInClass(seatsToAdjust, classId) {
     try {
-        const classRecord = await retrieveClassRecord(classId);
+        const classRecord = await getClassDetails(classId);
 
         if (classRecord) {
             const currentRemainingSeats = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
@@ -518,7 +539,7 @@ async function updateClassSeatCounts(seatsToAdjust, classId) {
     }
 }
 
-async function handlePaymentStatusUpdates() {
+async function managePaymentUpdates() {
     try {
         const response = await axios.get(airtableUrl, {
             headers: {
@@ -538,14 +559,14 @@ async function handlePaymentStatusUpdates() {
         });
 
         for (const record of records) {
-            await updateAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
+            await amendAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
         }
     } catch (error) {
         console.error(`Error handling Payment Status updates: ${JSON.stringify(error.response?.data || error.message)}`);
     }
 }
 
-async function updateLinkedClassPaymentStatus(recordId, newStatus) {
+async function updateClassStatuses(recordId, newStatus) {
     try {
         const recordResponse = await axios.get(`${airtableUrl}/${recordId}`, {
             headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
@@ -573,26 +594,35 @@ async function updateLinkedClassPaymentStatus(recordId, newStatus) {
     }
 }
 
-async function processRefunds() {
-    const refundRequests = await getCancelledWithoutRefundRecords();
+async function handleRefundProcessing() {
+    const refundRequests = await getNonRefundedCancellations();
 
     for (const record of refundRequests) {
         const classFieldValue = record.fields['Airtable id'];
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
 
-        await updateAirtableRecord(record.id, {
+        await amendAirtableRecord(record.id, {
             'Refund Confirmation': 'Confirmed',
             'Payment Status': 'Cancelled Without Refund',
             'Number of seat Purchased': 0,
         });
 
-        await updateClassSeatCounts(seatsPurchased, classFieldValue);
-        await updateLinkedClassPaymentStatus(record.id, 'Cancelled Without Refund');
+        await updateSeatsInClass(seatsPurchased, classFieldValue);
+        await updateClassStatuses(record.id, 'Cancelled Without Refund');
     }
 }
 
-setInterval(processRefunds, 50000);
-setInterval(handlePaymentStatusUpdates, 50000);
+async function runPeriodically2(task, intervalMs) {
+    console.log("Starting periodic task handleRefundProcessing...");
+    setInterval(async () => {
+        console.log(`Running task at ${new Date().toISOString()}`);
+        await task();
+    }, intervalMs);
+}
+
+// Update the periodic calls
+runPeriodically2(handleRefundProcessing, 50000);
+runPeriodically2(managePaymentUpdates, 50000);
 
 
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
