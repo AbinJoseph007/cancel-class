@@ -221,6 +221,16 @@ async function handleRefunds() {
         const classFieldValue = record.fields['Airtable id'];
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
 
+        // Skip if the record already reflects a refund
+        if (
+            record.fields['Refund Confirmation'] === 'Confirmed' &&
+            record.fields['Payment Status'] === 'Refunded' &&
+            seatsPurchased === 0
+        ) {
+            console.log(`Record ${record.id} already processed. Skipping.`);
+            continue;
+        }
+
         if (paymentIntentId) {
             const refund = await processRefund(paymentIntentId);
 
