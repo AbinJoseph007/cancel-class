@@ -154,7 +154,6 @@ async function processRefund(paymentIntentId) {
         console.log(`Refund successful for Payment Intent: ${paymentIntentId}`);
         return refund;
     } catch (error) {
-        console.error(`Error processing refund: ${JSON.stringify(error.response?.data || error.message)}`);
         return null;
     }
 }
