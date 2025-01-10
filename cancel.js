@@ -261,8 +261,8 @@ async function runPeriodically(task, intervalMs) {
 }
 
 // Update the periodic calls
-runPeriodically(handleRefunds, 50000);
-runPeriodically(handlePaymentStatusUpdates, 50000);
+runPeriodically(handleRefunds, 30000);
+runPeriodically(handlePaymentStatusUpdates, 30000);
 
 
 
@@ -449,8 +449,8 @@ async function runPeriodically1(task, intervalMs) {
 }
 
 // Update the periodic calls
-runPeriodically1(processRefundRequests, 50000);
-runPeriodically1(processPaymentStatusChanges, 50000);
+runPeriodically1(processRefundRequests, 30000);
+runPeriodically1(processPaymentStatusChanges, 30000);
 
 
 async function getNonRefundedCancellations() {
@@ -630,8 +630,8 @@ async function runPeriodically2(task, intervalMs) {
 }
 
 // Update the periodic calls
-runPeriodically2(handleRefundProcessing, 50000);
-runPeriodically2(managePaymentUpdates, 50000);
+runPeriodically2(handleRefundProcessing, 30000);
+runPeriodically2(managePaymentUpdates, 30000);
 
 
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
