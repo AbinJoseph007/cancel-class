@@ -32,7 +32,7 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY
 const AIRTABLE_TABLE_NAME3 = process.env.AIRTABLE_TABLE_NAME3
 const AIRTABLE_TABLE_NAME2 = process.env.AIRTABLE_TABLE_NAME2
 const WEBFLOW_COLLECTION_ID2 = process.env.WEBFLOW_COLLECTION_ID2
-const stripe = require('stripe')("sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8"); 
+const stripe = require('stripe')("sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8"); // Replace with your Stripe API Key
 
 
 
@@ -50,7 +50,6 @@ const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_
 const biawClassesUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Biaw Classes`;
 
 
-//reund 
 // Function to fetch records from Airtable
 async function getRefundRequests() {
     try {
@@ -163,33 +162,7 @@ async function processRefund(paymentIntentId) {
         return null;
     }
 }
-// Function to handle changes in "Payment Status"
-async function handlePaymentStatusUpdates() {
-  try {
-      const response = await axios.get(airtableUrl, {
-          headers: {
-              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          },
-      });
 
-      const records = response.data.records.filter(record => {
-          const refundConfirmation = record.fields['Refund Confirmation'];
-          const paymentStatus = record.fields['Payment Status'];
-
-          if (refundConfirmation === 'Confirmed' || refundConfirmation === 'Cancellation Revoked') {
-              return false;
-          }
-
-          return paymentStatus === 'Refunded';
-      });
-
-      for (const record of records) {
-          await updateAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
-      }
-  } catch (error) {
-      console.error(`Error handling Payment Status updates: ${JSON.stringify(error.response?.data || error.message)}`);
-  }
-}
 
 async function updateMultipleClassRegistrationPaymentStatus(recordId, newPaymentStatus) {
     try {
@@ -360,33 +333,6 @@ async function adjustBiawClassSeats(seatsPurchased, classFieldValue) {
     }
 }
 
-// Function to handle changes in "Payment Status"
-async function processPaymentStatusChanges() {
-    try {
-        const response = await axios.get(airtableUrl, {
-            headers: {
-                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            },
-        });
-
-        const records = response.data.records.filter(record => {
-            const refundConfirmation = record.fields['Refund Confirmation'];
-            const paymentStatus = record.fields['Payment Status'];
-
-            if (refundConfirmation === 'Confirmed' || refundConfirmation === 'Cancellation Revoked') {
-                return false;
-            }
-
-            return paymentStatus === 'ROII-Cancelled';
-        });
-
-        for (const record of records) {
-            await modifyAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
-        }
-    } catch (error) {
-        console.error(`Error handling Payment Status updates: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
-}
 
 async function MultipleClassRegistrationPaymentStatus(recordId, newPaymentStatus) {
     try {
@@ -532,32 +478,6 @@ async function updateSeatsInClass(seatsToAdjust, classId) {
     }
 }
 
-async function managePaymentUpdates() {
-    try {
-        const response = await axios.get(airtableUrl, {
-            headers: {
-                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            },
-        });
-
-        const records = response.data.records.filter(record => {
-            const refundConfirmation = record.fields['Refund Confirmation'];
-            const paymentStatus = record.fields['Payment Status'];
-
-            if (refundConfirmation === 'Confirmed' || refundConfirmation === 'Cancellation Revoked') {
-                return false;
-            }
-
-            return paymentStatus === 'Cancelled Without Refund';
-        });
-
-        for (const record of records) {
-            await amendAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
-        }
-    } catch (error) {
-        console.error(`Error handling Payment Status updates: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
-}
 
 async function updateClassStatuses(recordId, newStatus) {
     try {
@@ -608,11 +528,8 @@ async function handleRefundProcessing() {
 
 const tasks = [
     { name: "processRefundRequests", task: processRefundRequests },
-    { name: "processPaymentStatusChanges", task: processPaymentStatusChanges },
     { name: "handleRefundProcessing", task: handleRefundProcessing },
-    { name: "managePaymentUpdates", task: managePaymentUpdates },
     { name: "handleRefunds", task: handleRefunds },
-    { name: "handlePaymentStatusUpdates", task: handlePaymentStatusUpdates },
 ];
 
 async function runScheduler(tasks, intervalMs) {
