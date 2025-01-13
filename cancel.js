@@ -32,7 +32,7 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY
 const AIRTABLE_TABLE_NAME3 = process.env.AIRTABLE_TABLE_NAME3
 const AIRTABLE_TABLE_NAME2 = process.env.AIRTABLE_TABLE_NAME2
 const WEBFLOW_COLLECTION_ID2 = process.env.WEBFLOW_COLLECTION_ID2
-const stripe = require('stripe')("sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8"); // Replace with your Stripe API Key
+const stripe = require('stripe')("sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8"); 
 
 
 
@@ -40,11 +40,17 @@ function logError(context, error) {
   console.error(`[ERROR] ${context}:`, error.message || error);
 }
 
+app.get('/keep-alive', (req, res) => {
+    res.send('Service is alive');
+});
+
 
 const airtableBase = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
 const biawClassesUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Biaw Classes`;
 
+
+//reund 
 // Function to fetch records from Airtable
 async function getRefundRequests() {
     try {
@@ -252,18 +258,7 @@ async function handleRefunds() {
 
 
 
-async function runPeriodically(task, intervalMs) {
-    console.log("Starting periodic task handleRefunds...");
-    setInterval(async () => {
-        console.log(`Running task at ${new Date().toISOString()}`);
-        await task();
-    }, intervalMs);
-}
-
-// Update the periodic calls
-runPeriodically(handleRefunds, 30000);
-runPeriodically(handlePaymentStatusUpdates, 30000);
-
+//function  ROII cancelled
 
 
 // Function to fetch records from Airtable
@@ -440,18 +435,7 @@ async function processRefundRequests() {
 }
 
 
-async function runPeriodically1(task, intervalMs) {
-    console.log("Starting periodic task processRefundRequests...");
-    setInterval(async () => {
-        console.log(`Running task at ${new Date().toISOString()}`);
-        await task();
-    }, intervalMs);
-}
-
-// Update the periodic calls
-runPeriodically1(processRefundRequests, 30000);
-runPeriodically1(processPaymentStatusChanges, 30000);
-
+//function no refund
 
 async function getNonRefundedCancellations() {
     try {
@@ -621,17 +605,33 @@ async function handleRefundProcessing() {
     }
 }
 
-async function runPeriodically2(task, intervalMs) {
-    console.log("Starting periodic task handleRefundProcessing...");
+
+const tasks = [
+    { name: "processRefundRequests", task: processRefundRequests },
+    { name: "processPaymentStatusChanges", task: processPaymentStatusChanges },
+    { name: "handleRefundProcessing", task: handleRefundProcessing },
+    { name: "managePaymentUpdates", task: managePaymentUpdates },
+    { name: "handleRefunds", task: handleRefunds },
+    { name: "handlePaymentStatusUpdates", task: handlePaymentStatusUpdates },
+];
+
+async function runScheduler(tasks, intervalMs) {
+    console.log("Starting unified task scheduler...");
     setInterval(async () => {
-        console.log(`Running task at ${new Date().toISOString()}`);
-        await task();
+        for (const { name, task } of tasks) {
+            console.log(`Running task: ${name} at ${new Date().toISOString()}`);
+            try {
+                await task();
+            } catch (error) {
+                console.error(`Error in task ${name}:`, error.message || error);
+            }
+        }
     }, intervalMs);
 }
 
-// Update the periodic calls
-runPeriodically2(handleRefundProcessing, 30000);
-runPeriodically2(managePaymentUpdates, 30000);
+// Start the scheduler with a 30-second interval
+runScheduler(tasks, 30000);
+
 
 
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
