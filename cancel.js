@@ -546,7 +546,6 @@ async function runScheduler(tasks, intervalMs) {
     }, intervalMs);
 }
 
-// Start the scheduler with a 30-second interval
 runScheduler(tasks, 30000);
 
 
