@@ -605,6 +605,104 @@ setInterval(() => {
   processRows();
 }, 30000); // Runs every 10 seconds
 
+const INTERVAL_MS = 40000; 
+
+async function processPayments() {
+    try {
+      console.log("Fetching records from Airtable...");
+  
+      // Fetch records with filtering
+      const records = await base(AIRTABLE_TABLE_NAME3)
+        .select({
+          filterByFormula: `AND(
+            {Booking Type} = "Admin booked",
+            NOT({Amount Total} = ""),
+            OR(
+              {Payment ID} = "",
+              NOT({Payment ID})
+            )
+          )`,
+        })
+        .all();
+  
+      if (records.length === 0) {
+        console.log("No records found matching the filter.");
+        return;
+      }
+  
+      console.log(`Found ${records.length} records matching the filter.`);
+  
+      for (const record of records) {
+        console.log(`Processing record: ${record.id}`);
+  
+        // Extract necessary fields
+        const email = record.get('Email');
+        const amountTotalField = record.get('Amount Total');
+        const paymentID = record.get('Payment ID');
+        const amountTotal = parseFloat(
+          amountTotalField.replace('$', '').trim()
+        ) * 100; // Convert to cents
+  
+        // Validate data
+        if (!email || isNaN(amountTotal)) {
+          console.log(
+            `Skipping record due to missing or invalid data. Record ID: ${record.id}`
+          );
+          continue;
+        }
+  
+        if (paymentID) {
+          console.log(
+            `Skipping record: Payment already made. Record ID: ${record.id}, Payment ID: ${paymentID}`
+          );
+          continue;
+        }
+  
+        try {
+          console.log(
+            `Creating payment for ${email} with amount ${amountTotal} cents.`
+          );
+  
+          // Create a Stripe payment
+          const payment = await stripe.paymentIntents.create({
+            amount: amountTotal,
+            currency: 'usd',
+            receipt_email: email,
+            description: `Payment for booking: ${record.id}`,
+            payment_method_types: ['card'], // You may want to set up other payment methods if applicable
+          });
+  
+          console.log(`Payment successful for ${email}: ${payment.id}`);
+  
+          // Update Airtable record with Payment ID and Payment Status
+          await base(AIRTABLE_TABLE_NAME3).update(record.id, {
+            'Payment ID': payment.id, // Set the Payment Intent ID
+            'Payment Status': 'Paid', // Update the payment status
+          });
+  
+          console.log(
+            `Updated Airtable record ${record.id} with Payment ID ${payment.id} and Payment Status 'Paid'.`
+          );
+        } catch (error) {
+          console.error(
+            `Failed to create payment for ${email} or update Airtable. Error: ${error.message}`
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `Error fetching records or processing payments: ${error.message}`
+      );
+    }
+  }
+  
+  // Execute the function
+  processPayments();
+  
+  setInterval(() => {
+    console.log("Checking for updates2...");
+    processPayments();
+  }, INTERVAL_MS);
 
 const PORT = process.env.PORT || 6000;
 app.listen(PORT, () => {
