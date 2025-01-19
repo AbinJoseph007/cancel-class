@@ -797,7 +797,7 @@ async function processPayments() {
                 // Update Airtable record with Payment Status as "Paid" (optional)
                 await base(AIRTABLE_TABLE_NAME3).update(record.id, {
                     'Payment Status': 'ROII-Free',
-                    "ROII member":"Yes" 
+                    'ROII member':'Yes' 
                 });
   
                 console.log(`Updated Airtable record ${record.id} with Payment Status 'ROII-Free'.`);
