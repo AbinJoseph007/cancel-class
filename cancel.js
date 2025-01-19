@@ -755,7 +755,7 @@ async function processPayments() {
     processPayments();
   }, INTERVAL_MS);
 
-  async function processPayments() {
+  async function processPayments1() {
     try {
         console.log("Fetching records from Airtable...");
   
@@ -845,6 +845,16 @@ async function processPayments() {
     }
 }
 
+async function runPeriodically22(intervalMs) {
+    console.log("Starting periodic sync...");
+    setInterval(async () => {
+        console.log(`Running sync at ${new Date().toISOString()}`);
+        await processPayments1();  // Your existing processPayments1 logic
+    }, intervalMs);
+}
+
+// Start periodic execution every 30 seconds (30 * 1000 milliseconds)
+runPeriodically22(30 * 1000);
 
 const PORT = process.env.PORT || 6000;
 app.listen(PORT, () => {
