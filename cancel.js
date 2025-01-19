@@ -685,6 +685,7 @@ async function processPayments() {
           await base(AIRTABLE_TABLE_NAME3).update(record.id, {
             'Payment ID': payment.id,
             'Payment Status': 'Paid',
+            'ROII member':'No'
           });
   
           console.log(
@@ -765,8 +766,8 @@ async function processPayments() {
             filterByFormula: `AND(
                 {Booking Type} = "Admin booked",
                 {Payment Status} = "ROII-Free",
-                {ROII member} != "Yes"
-            )`            
+                {ROII member} = ""
+            )`                       
           })
           .all();
   
