@@ -555,8 +555,12 @@ const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 // Function to process and update rows
 async function processRows() {
   try {
-    // Fetch all records in the table
-    const records = await base(AIRTABLE_TABLE_NAME).select().all();
+    // Fetch records where "Publish / Unpublish" field is "Update"
+    const records = await base(AIRTABLE_TABLE_NAME)
+      .select({
+        filterByFormula: `{Publish / Unpublish} = "Update"`, // Filter condition
+      })
+      .all();
 
     for (const record of records) {
       const fields = record.fields;
@@ -583,9 +587,9 @@ async function processRows() {
           await base(AIRTABLE_TABLE_NAME).update(recordId, {
             'Number of seats': Number(newTotalSeats), // Ensure it's a number
             'Number of seats remaining': String(newRemainingSeats), // Convert number to string
-            'Additional seat': "0", // Reset to default
-            'Reduce Seat': "0", // Reset to default
-            'Publish / Unpublish':"Update"
+            // 'Additional seat': "0", // Reset to default
+            // 'Reduce Seat': "0", // Reset to default
+            'Publish / Unpublish': "Updated" // Mark as updated
           });
 
           console.log(`Record updated successfully: ${recordId}`);
@@ -598,6 +602,8 @@ async function processRows() {
     console.error('Error processing rows:', error.message);
   }
 }
+
+
 
 // Run the function at regular intervals
 setInterval(() => {
@@ -617,6 +623,7 @@ async function processPayments() {
           filterByFormula: `AND(
             {Booking Type} = "Admin booked",
             NOT({Amount Total} = ""),
+            {Payment Status} = "Pay",
             OR(
               {Payment ID} = "",
               NOT({Payment ID})
@@ -635,18 +642,20 @@ async function processPayments() {
       for (const record of records) {
         console.log(`Processing record: ${record.id}`);
   
-        // Extract necessary fields
+        // Extract and validate necessary fields
         const email = record.get('Email');
         const amountTotalField = record.get('Amount Total');
         const paymentID = record.get('Payment ID');
-        const amountTotal = parseFloat(
-          amountTotalField.replace('$', '').trim()
-        ) * 100; // Convert to cents
+        const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0; // Extracted field
+        const classId1 = record.get('Biaw Classes'); // Assuming a field linking to the class
+        const amountTotal = amountTotalField
+          ? parseFloat(amountTotalField.replace('$', '').trim()) * 100 // Convert to cents
+          : NaN;
   
-        // Validate data
-        if (!email || isNaN(amountTotal)) {
+        if (!email || isNaN(amountTotal) || seatsPurchased <= 0 || !classId1) {
           console.log(
-            `Skipping record due to missing or invalid data. Record ID: ${record.id}`
+            `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
+            { email, amountTotal, seatsPurchased, classId1 }
           );
           continue;
         }
@@ -659,9 +668,7 @@ async function processPayments() {
         }
   
         try {
-          console.log(
-            `Creating payment for ${email} with amount ${amountTotal} cents.`
-          );
+          console.log(`Creating payment for ${email} with amount ${amountTotal} cents.`);
   
           // Create a Stripe payment
           const payment = await stripe.paymentIntents.create({
@@ -669,20 +676,23 @@ async function processPayments() {
             currency: 'usd',
             receipt_email: email,
             description: `Payment for booking: ${record.id}`,
-            payment_method_types: ['card'], // You may want to set up other payment methods if applicable
+            payment_method_types: ['card'],
           });
   
           console.log(`Payment successful for ${email}: ${payment.id}`);
   
           // Update Airtable record with Payment ID and Payment Status
           await base(AIRTABLE_TABLE_NAME3).update(record.id, {
-            'Payment ID': payment.id, // Set the Payment Intent ID
-            'Payment Status': 'Paid', // Update the payment status
+            'Payment ID': payment.id,
+            'Payment Status': 'Paid',
           });
   
           console.log(
             `Updated Airtable record ${record.id} with Payment ID ${payment.id} and Payment Status 'Paid'.`
           );
+  
+          // Update seats in the class
+          await updateSeatsInClass1(seatsPurchased, classId1);
         } catch (error) {
           console.error(
             `Failed to create payment for ${email} or update Airtable. Error: ${error.message}`
@@ -696,13 +706,247 @@ async function processPayments() {
     }
   }
   
+  async function updateSeatsInClass1(seatsToAdjust1, classId1) {
+    try {
+        // Fetch class record from Airtable
+        const classRecord = await base(AIRTABLE_TABLE_NAME).find(classId1);
+
+        if (classRecord) {
+            // Fetch the number of seats from the class record
+            const currentRemainingSeats1 = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
+            const currentTotalPurchasedSeats1 = parseInt(classRecord.fields['Total Number of Purchased Seats'], 10) || 0;
+
+            // Calculate the updated values based on the payment
+            const updatedRemainingSeats1 = (currentRemainingSeats1 - seatsToAdjust1).toString();
+            const updatedTotalSeats1 = (currentTotalPurchasedSeats1 + seatsToAdjust1).toString();
+
+            console.log('Updating Biaw Classes:', {
+                'Number of seats remaining': updatedRemainingSeats1,
+                'Total Number of Purchased Seats': updatedTotalSeats1,
+            });
+
+            // Update Airtable record with new values
+            await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+                fields: {
+                    'Number of seats remaining': updatedRemainingSeats1,
+                    'Total Number of Purchased Seats': updatedTotalSeats1,
+                },
+            }, {
+                headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+            });
+
+            console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+        }
+    } catch (error) {
+        if (error.response?.data) {
+            console.error(`Error updating class. Airtable response: ${JSON.stringify(error.response.data)}`);
+        } else {
+            console.error(`Error updating class: ${error.message}`);
+        }
+    }
+}
+
   // Execute the function
   processPayments();
+  
   
   setInterval(() => {
     console.log("Checking for updates2...");
     processPayments();
   }, INTERVAL_MS);
+
+  async function processPayments1() {
+    try {
+        console.log("Fetching records from Airtable...");
+  
+        // Fetch records with filtering
+        const records = await base(AIRTABLE_TABLE_NAME3)
+          .select({
+            filterByFormula: `AND(
+                {Booking Type} = "Admin booked",
+                {Payment Status} = "ROII-Free",
+                {ROII member} != "Yes"
+            )`            
+          })
+          .all();
+  
+        if (records.length === 0) {
+            console.log("No records found matching the filter.");
+            return;
+        }
+  
+        console.log(`Found ${records.length} records matching the filter.`);
+  
+        for (const record of records) {
+            console.log(`Processing record: ${record.id}`);
+  
+            // Extract and validate necessary fields
+            const email = record.get('Email');
+            const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0; // Extracted field
+            const classId1 = record.get('Biaw Classes'); // Assuming a field linking to the class
+
+            if (!email || seatsPurchased <= 0 || !classId1) {
+                console.log(
+                    `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
+                    { email, seatsPurchased, classId1 }
+                );
+                continue;
+            }
+
+            try {
+                // Update Airtable record with Payment Status as "Paid" (optional)
+                await base(AIRTABLE_TABLE_NAME3).update(record.id, {
+                    'Payment Status': 'ROII-Free',
+                    "ROII member":"Yes" 
+                });
+  
+                console.log(`Updated Airtable record ${record.id} with Payment Status 'ROII-Free'.`);
+
+                // Fetch class record from Airtable
+                const classRecord2 = await base(AIRTABLE_TABLE_NAME).find(classId1);
+
+                if (classRecord2) {
+                    // Fetch the number of seats from the class record
+                    const currentRemainingSeats2 = parseInt(classRecord2.fields['Number of seats remaining'], 10) || 0;
+                    const currentTotalPurchasedSeats2 = parseInt(classRecord2.fields['Total Number of Purchased Seats'], 10) || 0;
+
+                    // Calculate the updated values based on the purchased seats
+                    const updatedRemainingSeats2 = (currentRemainingSeats2 - seatsPurchased).toString();
+                    const updatedTotalSeats2 = (currentTotalPurchasedSeats2 + seatsPurchased).toString();
+
+                    console.log('Updating Biaw Classes:', {
+                        'Number of seats remaining': updatedRemainingSeats2,
+                        'Total Number of Purchased Seats': updatedTotalSeats2,
+                    });
+
+                    // Update Airtable record with new values
+                    await axios.patch(`${biawClassesUrl}/${classRecord2.id}`, {
+                        fields: {
+                            'Number of seats remaining': updatedRemainingSeats2,
+                            'Total Number of Purchased Seats': updatedTotalSeats2,
+                        },
+                    }, {
+                        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                    });
+
+                    console.log(`Updated Biaw Classes record: ${classRecord2.id}`);
+                }
+
+            } catch (error) {
+                console.error(
+                    `Failed to update Airtable or adjust class seats. Error: ${error.message}`
+                );
+            }
+        }
+    } catch (error) {
+        console.error(
+            `Error fetching records or processing payments: ${error.message}`
+        );
+    }
+}
+
+//ROII class purchase
+async function processPayments1() {
+    try {
+        console.log("Fetching records from Airtable...");
+  
+        // Fetch records with filtering
+        const records = await base(AIRTABLE_TABLE_NAME3)
+          .select({
+            filterByFormula: `AND(
+                {Booking Type} = "Admin booked",
+                {Payment Status} = "ROII-Free"
+            )`
+            
+          })
+          .all();
+  
+        if (records.length === 0) {
+            console.log("No records found matching the filter.");
+            return;
+        }
+  
+        console.log(`Found ${records.length} records matching the filter.`);
+  
+        for (const record of records) {
+            console.log(`Processing record: ${record.id}`);
+  
+            // Extract and validate necessary fields
+            const email = record.get('Email');
+            const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0; // Extracted field
+            const classId1 = record.get('Biaw Classes'); // Assuming a field linking to the class
+
+            if (!email || seatsPurchased <= 0 || !classId1) {
+                console.log(
+                    `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
+                    { email, seatsPurchased, classId1 }
+                );
+                continue;
+            }
+
+            try {
+                // Update Airtable record with Payment Status as "Paid" (optional)
+                await base(AIRTABLE_TABLE_NAME3).update(record.id, {
+                    'Payment Status': 'ROII-Free', // Optionally set this field to 'Paid' for tracking
+                });
+  
+                console.log(`Updated Airtable record ${record.id} with Payment Status 'Paid'.`);
+
+                // Fetch class record from Airtable
+                const classRecord = await base(AIRTABLE_TABLE_NAME).find(classId1);
+
+                if (classRecord) {
+                    // Fetch the number of seats from the class record
+                    const currentRemainingSeats1 = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
+                    const currentTotalPurchasedSeats1 = parseInt(classRecord.fields['Total Number of Purchased Seats'], 10) || 0;
+
+                    // Calculate the updated values based on the purchased seats
+                    const updatedRemainingSeats1 = (currentRemainingSeats1 - seatsPurchased).toString();
+                    const updatedTotalSeats1 = (currentTotalPurchasedSeats1 + seatsPurchased).toString();
+
+                    console.log('Updating Biaw Classes:', {
+                        'Number of seats remaining': updatedRemainingSeats1,
+                        'Total Number of Purchased Seats': updatedTotalSeats1,
+                    });
+
+                    // Update Airtable record with new values
+                    await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+                        fields: {
+                            'Number of seats remaining': updatedRemainingSeats1,
+                            'Total Number of Purchased Seats': updatedTotalSeats1,
+                        },
+                    }, {
+                        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                    });
+
+                    console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+                }
+
+            } catch (error) {
+                console.error(
+                    `Failed to update Airtable or adjust class seats. Error: ${error.message}`
+                );
+            }
+        }
+    } catch (error) {
+        console.error(
+            `Error fetching records or processing payments: ${error.message}`
+        );
+    }
+}
+
+processPayments1()
+
+async function runPeriodically33(intervalMs) {
+    console.log("Starting ROII periodic sync...");
+    setInterval(async () => {
+        console.log(`Running sync at ${new Date().toISOString()}`);
+        await processPayments1();  // Your existing processPayments1 logic
+    }, intervalMs);
+}
+
+// Start periodic execution every 30 seconds (30 * 1000 milliseconds)
+runPeriodically33(30 * 1000);
 
 const PORT = process.env.PORT || 6000;
 app.listen(PORT, () => {
