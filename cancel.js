@@ -797,7 +797,7 @@ async function processPayments() {
             try {
                 // Update Airtable record with Payment Status as "Paid" (optional)
                 await base(AIRTABLE_TABLE_NAME3).update(record.id, {
-                    'Payment Status': 'ROII-free',
+                    'Payment Status': 'ROII-Free',
                     'ROII member':'Yes' // Optionally set this field to 'Paid' for tracking
                 });
   
@@ -847,7 +847,7 @@ async function processPayments() {
 }
 
 async function runPeriodically22(intervalMs) {
-    console.log("Starting periodic sync...");
+    console.log("Starting Roii periodic sync...");
     setInterval(async () => {
         console.log(`Running sync at ${new Date().toISOString()}`);
         await processPayments1();  // Your existing processPayments1 logic
@@ -875,11 +875,11 @@ async function createCoupons() {
   try {
     // Fetch records from Airtable
     const records = await base(AIRTABLE_TABLE_NAME)
-      .select({
-        filterByFormula: `AND({% Discounts} > 0, {Coupon Code} = "", {Member Price ID} != "", {Non-Member Price ID} != "")`
-      })
-      .all();
-
+    .select({
+      filterByFormula: `AND({% Discounts} > 0, {Coupon Code} = "", {Member Price ID} != "", {Non-Member Price ID} != "", {Publish / Unpublish} != "Deleted")`
+    })
+    .all();
+  
     // Process each record
     for (const record of records) {
       const discountPercentage = record.get('% Discounts');
