@@ -613,99 +613,111 @@ setInterval(() => {
 
 const INTERVAL_MS = 40000; 
 
+
+
 async function processPayments() {
     try {
-      console.log("Fetching records from Airtable...");
-  
-      // Fetch records with filtering
-      const records = await base(AIRTABLE_TABLE_NAME3)
-        .select({
-          filterByFormula: `AND(
-            {Booking Type} = "Admin booked",
-            NOT({Amount Total} = ""),
-            {Payment Status} = "Pay",
-            OR(
-              {Payment ID} = "",
-              NOT({Payment ID})
-            )
-          )`,
-        })
-        .all();
-  
-      if (records.length === 0) {
-        console.log("No records found matching the filter.");
-        return;
-      }
-  
-      console.log(`Found ${records.length} records matching the filter.`);
-  
-      for (const record of records) {
-        console.log(`Processing record: ${record.id}`);
-  
-        // Extract and validate necessary fields
-        const email = record.get('Email');
-        const amountTotalField = record.get('Amount Total');
-        const paymentID = record.get('Payment ID');
-        const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0; // Extracted field
-        const classId1 = record.get('Biaw Classes'); // Assuming a field linking to the class
-        const amountTotal = amountTotalField
-          ? parseFloat(amountTotalField.replace('$', '').trim()) * 100 // Convert to cents
-          : NaN;
-  
-        if (!email || isNaN(amountTotal) || seatsPurchased <= 0 || !classId1) {
-          console.log(
-            `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
-            { email, amountTotal, seatsPurchased, classId1 }
-          );
-          continue;
+        console.log("Fetching records from Airtable...");
+
+        // Fetch records with filtering
+        const records = await base(AIRTABLE_TABLE_NAME3)
+            .select({
+                filterByFormula: `AND(
+                    {Booking Type} = "Admin booked",
+                    NOT({Amount Total} = ""),
+                    {Payment Status} = "Pay",
+                    OR(
+                        {Payment ID} = "",
+                        NOT({Payment ID})
+                    )
+                )`,
+            })
+            .all();
+
+        if (records.length === 0) {
+            console.log("No records found matching the filter.");
+            return;
         }
-  
-        if (paymentID) {
-          console.log(
-            `Skipping record: Payment already made. Record ID: ${record.id}, Payment ID: ${paymentID}`
-          );
-          continue;
+
+        console.log(`Found ${records.length} records matching the filter.`);
+
+        for (const record of records) {
+            console.log(`Processing record: ${record.id}`);
+
+            // Extract and validate necessary fields
+            const email = record.get('Email');
+            const amountTotalField = record.get('Amount Total');
+            const paymentID = record.get('Payment ID');
+            const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0; // Extracted field
+            const classId1 = record.get('Biaw Classes'); // Assuming a field linking to the class
+            const amountTotal = amountTotalField
+                ? parseFloat(amountTotalField.replace('$', '').trim()) * 100 // Convert to cents
+                : NaN;
+
+            if (!email || isNaN(amountTotal) || seatsPurchased <= 0 || !classId1) {
+                console.log(
+                    `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
+                    { email, amountTotal, seatsPurchased, classId1 }
+                );
+                continue;
+            }
+
+            if (paymentID) {
+                console.log(
+                    `Skipping record: Payment already made. Record ID: ${record.id}, Payment ID: ${paymentID}`
+                );
+                continue;
+            }
+
+            try {
+                // Here we're using Stripe's predefined test card (test card ID)
+                const testCardPaymentMethod = "pm_card_visa";  // This is the predefined test Payment Method ID
+
+                console.log(`Creating payment for ${email} with amount ${amountTotal} cents.`);
+
+                // Create a Stripe Payment Intent using the test Payment Method ID
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: amountTotal,
+                    currency: 'usd',
+                    receipt_email: email,
+                    description: `Payment for booking: ${record.id}`,
+                    payment_method: testCardPaymentMethod,  // Use the test Payment Method ID
+                    confirm: true,  // Automatically confirm the payment
+                    automatic_payment_methods: {
+                        enabled: true,  // Enable automatic payment methods selection
+                        allow_redirects: "never"  // Prevent redirects (optional)
+                    }
+                });
+
+                console.log(`Payment successful for ${email}: ${paymentIntent.id}`);
+
+                // Update Airtable record with Payment ID and Payment Status
+                await base(AIRTABLE_TABLE_NAME3).update(record.id, {
+                    'Payment ID': paymentIntent.id,
+                    'Payment Status': 'Paid',
+                    'ROII member': 'No'
+                });
+
+                console.log(
+                    `Updated Airtable record ${record.id} with Payment ID ${paymentIntent.id} and Payment Status 'Paid'.`
+                );
+
+                // Update seats in the class
+                await updateSeatsInClass1(seatsPurchased, classId1);
+            } catch (error) {
+                console.error(
+                    `Failed to create payment for ${email} or update Airtable. Error: ${error.message}`
+                );
+            }
         }
-  
-        try {
-          console.log(`Creating payment for ${email} with amount ${amountTotal} cents.`);
-  
-          // Create a Stripe payment
-          const payment = await stripe.paymentIntents.create({
-            amount: amountTotal,
-            currency: 'usd',
-            receipt_email: email,
-            description: `Payment for booking: ${record.id}`,
-            payment_method_types: ['card'],
-          });
-  
-          console.log(`Payment successful for ${email}: ${payment.id}`);
-  
-          // Update Airtable record with Payment ID and Payment Status
-          await base(AIRTABLE_TABLE_NAME3).update(record.id, {
-            'Payment ID': payment.id,
-            'Payment Status': 'Paid',
-            'ROII member':'No'
-          });
-  
-          console.log(
-            `Updated Airtable record ${record.id} with Payment ID ${payment.id} and Payment Status 'Paid'.`
-          );
-  
-          // Update seats in the class
-          await updateSeatsInClass1(seatsPurchased, classId1);
-        } catch (error) {
-          console.error(
-            `Failed to create payment for ${email} or update Airtable. Error: ${error.message}`
-          );
-        }
-      }
     } catch (error) {
-      console.error(
-        `Error fetching records or processing payments: ${error.message}`
-      );
+        console.error(
+            `Error fetching records or processing payments: ${error.message}`
+        );
     }
-  }
+}
+
+
   
   async function updateSeatsInClass1(seatsToAdjust1, classId1) {
     try {
@@ -872,60 +884,64 @@ async function getProductFromPrice(priceId) {
 
 // Main function
 async function createCoupons() {
-  try {
-    // Fetch records from Airtable
-    const records = await base(AIRTABLE_TABLE_NAME)
-    .select({
-      filterByFormula: `AND({% Discounts} > 0, {Coupon Code} = "", {Member Price ID} != "", {Non-Member Price ID} != "", {Publish / Unpublish} != "Deleted")`
-    })
-    .all();
+    try {
+      // Fetch records from Airtable
+      const records = await base(AIRTABLE_TABLE_NAME)
+      .select({
+        filterByFormula: `AND({% Discounts} > 0, {Coupon Code} = "", {Member Price ID} != "", {Non-Member Price ID} != "", {Publish / Unpublish} != "Deleted")`
+      })
+      .all();
+    
+      // Process each record
+      for (const record of records) {
+        const discountPercentage = record.get('% Discounts');
+        const memberPriceId = record.get('Member Price ID');
+        const nonMemberPriceId = record.get('Non-Member Price ID');
+        const maxDiscountedSeats = record.get('Maximum discounted seats');
   
-    // Process each record
-    for (const record of records) {
-      const discountPercentage = record.get('% Discounts');
-      const memberPriceId = record.get('Member Price ID');
-      const nonMemberPriceId = record.get('Non-Member Price ID');
-
-      if (discountPercentage && memberPriceId && nonMemberPriceId) {
-        // Fetch the product IDs for the given price IDs
-        const memberProductId = await getProductFromPrice(memberPriceId);
-        const nonMemberProductId = await getProductFromPrice(nonMemberPriceId);
-
-        // Create a Stripe coupon
-        const discountCoupon = await stripe2.coupons.create({
-          percent_off: discountPercentage,
-          duration: 'once',
-          name: `${discountPercentage}% Discount for`,
-          applies_to: {
-            products: [memberProductId, nonMemberProductId], // Apply to both products
-          },
-        });
-
-        console.log('Coupon created successfully:', discountCoupon);
-
-        // Generate a random promotion code
-        const generatedCode = generateRandomCode(8);
-
-        // Create a Stripe promotion code
-        const promotionCode = await stripe2.promotionCodes.create({
-          coupon: discountCoupon.id,
-          code: generatedCode,
-        });
-
-        console.log('Promotion code created successfully:', promotionCode);
-
-        // Update Airtable with the promotion code
-        await base(AIRTABLE_TABLE_NAME).update(record.id, {
-          'Coupon Code': generatedCode,
-        });
-
-        console.log(`Record updated successfully for ID: ${record.id}`);
+        if (discountPercentage && memberPriceId && nonMemberPriceId) {
+          // Fetch the product IDs for the given price IDs
+          const memberProductId = await getProductFromPrice(memberPriceId);
+          const nonMemberProductId = await getProductFromPrice(nonMemberPriceId);
+  
+          // Create a Stripe coupon
+          const discountCoupon = await stripe2.coupons.create({
+            percent_off: discountPercentage,
+            duration: 'once',
+            name: `${discountPercentage}% Discount for`,
+            applies_to: {
+              products: [memberProductId, nonMemberProductId], // Apply to both products
+            },
+            // Set max_redemptions if there are discounted seats
+            max_redemptions: maxDiscountedSeats > 0 ? maxDiscountedSeats : undefined,
+          });
+  
+          console.log('Coupon created successfully:', discountCoupon);
+  
+          // Generate a random promotion code
+          const generatedCode = generateRandomCode(8);
+  
+          // Create a Stripe promotion code
+          const promotionCode = await stripe2.promotionCodes.create({
+            coupon: discountCoupon.id,
+            code: generatedCode,
+          });
+  
+          console.log('Promotion code created successfully:', promotionCode);
+  
+          // Update Airtable with the promotion code
+          await base(AIRTABLE_TABLE_NAME).update(record.id, {
+            'Coupon Code': generatedCode,
+          });
+  
+          console.log(`Record updated successfully for ID: ${record.id}`);
+        }
       }
+    } catch (error) {
+      console.error('Error:', error);
     }
-  } catch (error) {
-    console.error('Error:', error);
   }
-}
+  
 
 // Helper function to generate random codes
 function generateRandomCode(length) {
