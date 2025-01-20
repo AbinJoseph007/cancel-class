@@ -857,6 +857,102 @@ async function runPeriodically22(intervalMs) {
 // Start periodic execution every 30 seconds (30 * 1000 milliseconds)
 runPeriodically22(30 * 1000);
 
+const stripe2 = require('stripe')(process.env.STRIPE_API_KEY);
+
+// Function to get the product ID from a price ID
+async function getProductFromPrice(priceId) {
+  try {
+    const price = await stripe2.prices.retrieve(priceId);
+    return price.product; // Returns the product ID associated with the price
+  } catch (error) {
+    console.error(`Error fetching product for price ID ${priceId}:`, error);
+    throw error;
+  }
+}
+
+// Main function
+async function createCoupons() {
+  try {
+    // Fetch records from Airtable
+    const records = await base(AIRTABLE_TABLE_NAME)
+      .select({
+        filterByFormula: `AND({% Discounts} > 0, {Coupon Code} = "", {Member Price ID} != "", {Non-Member Price ID} != "")`
+      })
+      .all();
+
+    // Process each record
+    for (const record of records) {
+      const discountPercentage = record.get('% Discounts');
+      const memberPriceId = record.get('Member Price ID');
+      const nonMemberPriceId = record.get('Non-Member Price ID');
+
+      if (discountPercentage && memberPriceId && nonMemberPriceId) {
+        // Fetch the product IDs for the given price IDs
+        const memberProductId = await getProductFromPrice(memberPriceId);
+        const nonMemberProductId = await getProductFromPrice(nonMemberPriceId);
+
+        // Create a Stripe coupon
+        const discountCoupon = await stripe2.coupons.create({
+          percent_off: discountPercentage,
+          duration: 'once',
+          name: `${discountPercentage}% Discount for`,
+          applies_to: {
+            products: [memberProductId, nonMemberProductId], // Apply to both products
+          },
+        });
+
+        console.log('Coupon created successfully:', discountCoupon);
+
+        // Generate a random promotion code
+        const generatedCode = generateRandomCode(8);
+
+        // Create a Stripe promotion code
+        const promotionCode = await stripe2.promotionCodes.create({
+          coupon: discountCoupon.id,
+          code: generatedCode,
+        });
+
+        console.log('Promotion code created successfully:', promotionCode);
+
+        // Update Airtable with the promotion code
+        await base(AIRTABLE_TABLE_NAME).update(record.id, {
+          'Coupon Code': generatedCode,
+        });
+
+        console.log(`Record updated successfully for ID: ${record.id}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+
+// Helper function to generate random codes
+function generateRandomCode(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Run the main function
+createCoupons();
+
+async function runPeriodically34(intervalMs) {
+    console.log("Starting periodic sync...");
+    setInterval(async () => {
+        console.log(`Running sync at ${new Date().toISOString()}`);
+        await createCoupons();  // Your existing processPayments1 logic
+    }, intervalMs);
+}
+
+// Start periodic execution every 30 seconds (30 * 1000 milliseconds)
+runPeriodically34(40 * 1000);
+
+
+
 const PORT = process.env.PORT || 6000;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
