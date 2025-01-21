@@ -766,7 +766,7 @@ async function createCoupons() {
       // Fetch records from Airtable
       const records = await base(AIRTABLE_TABLE_NAME)
       .select({
-        filterByFormula: `AND({% Discounts} > 0, {Coupon Code} = "", {Member Price ID} != "", {Non-Member Price ID} != "", {Publish / Unpublish} != "Deleted")`
+        filterByFormula: `AND({% Discounts} > 0, {Coupon Code} = "", {Member Price ID} != "", {Non-Member Price ID} != "", {Publish / Unpublish} = "Update")`
       })
       .all();
     
@@ -810,6 +810,7 @@ async function createCoupons() {
           // Update Airtable with the promotion code
           await base(AIRTABLE_TABLE_NAME).update(record.id, {
             'Coupon Code': generatedCode,
+            "Publish / Unpublish":"Updated"
           });
   
           console.log(`Record updated successfully for ID: ${record.id}`);
