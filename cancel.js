@@ -4,6 +4,8 @@ const cors = require("cors");
 const axios = require('axios');
 const { log } = require('console');
 require('dotenv').config();
+const nodemailer = require('nodemailer');
+
 
 const app = express();
 app.use(express.json());
@@ -615,6 +617,109 @@ const INTERVAL_MS = 40000;
 
 
 
+// async function processPayments() {
+//     try {
+//         console.log("Fetching records from Airtable...");
+
+//         // Fetch records with filtering
+//         const records = await base(AIRTABLE_TABLE_NAME3)
+//             .select({
+//                 filterByFormula: `AND(
+//                     {Booking Type} = "Admin booked",
+//                     NOT({Amount Total} = ""),
+//                     {Payment Status} = "Pay",
+//                     OR(
+//                         {Payment ID} = "",
+//                         NOT({Payment ID})
+//                     )
+//                 )`,
+//             })
+//             .all();
+
+//         if (records.length === 0) {
+//             console.log("No records found matching the filter.");
+//             return;
+//         }
+
+//         console.log(`Found ${records.length} records matching the filter.`);
+
+//         for (const record of records) {
+//             console.log(`Processing record: ${record.id}`);
+
+//             // Extract and validate necessary fields
+//             const email = record.get('Email');
+//             const amountTotalField = record.get('Amount Total');
+//             const paymentID = record.get('Payment ID');
+//             const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0; // Extracted field
+//             const classId1 = record.get('Biaw Classes'); // Assuming a field linking to the class
+//             const amountTotal = amountTotalField
+//                 ? parseFloat(amountTotalField.replace('$', '').trim()) * 100 // Convert to cents
+//                 : NaN;
+
+//             if (!email || isNaN(amountTotal) || seatsPurchased <= 0 || !classId1) {
+//                 console.log(
+//                     `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
+//                     { email, amountTotal, seatsPurchased, classId1 }
+//                 );
+//                 continue;
+//             }
+
+//             if (paymentID) {
+//                 console.log(
+//                     `Skipping record: Payment already made. Record ID: ${record.id}, Payment ID: ${paymentID}`
+//                 );
+//                 continue;
+//             }
+
+//             try {
+//                 // Here we're using Stripe's predefined test card (test card ID)
+//                 const testCardPaymentMethod = "pm_card_visa";  // This is the predefined test Payment Method ID
+
+//                 console.log(`Creating payment for ${email} with amount ${amountTotal} cents.`);
+
+//                 // Create a Stripe Payment Intent using the test Payment Method ID
+//                 const paymentIntent = await stripe.paymentIntents.create({
+//                     amount: amountTotal,
+//                     currency: 'usd',
+//                     receipt_email: email,
+//                     description: `Payment for booking: ${record.id}`,
+//                     payment_method: testCardPaymentMethod,  // Use the test Payment Method ID
+//                     confirm: true,  // Automatically confirm the payment
+//                     automatic_payment_methods: {
+//                         enabled: true,  // Enable automatic payment methods selection
+//                         allow_redirects: "never"  // Prevent redirects (optional)
+//                     }
+//                 });
+
+//                 console.log(`Payment successful for ${email}: ${paymentIntent.id}`);
+
+//                 // Update Airtable record with Payment ID and Payment Status
+//                 await base(AIRTABLE_TABLE_NAME3).update(record.id, {
+//                     'Payment ID': paymentIntent.id,
+//                     'Payment Status': 'Paid',
+//                     'ROII member': 'No'
+//                 });
+
+//                 console.log(
+//                     `Updated Airtable record ${record.id} with Payment ID ${paymentIntent.id} and Payment Status 'Paid'.`
+//                 );
+
+//                 // Update seats in the class
+//                 await updateSeatsInClass1(seatsPurchased, classId1);
+//             } catch (error) {
+//                 console.error(
+//                     `Failed to create payment for ${email} or update Airtable. Error: ${error.message}`
+//                 );
+//             }
+//         }
+//     } catch (error) {
+//         console.error(
+//             `Error fetching records or processing payments: ${error.message}`
+//         );
+//     }
+// }
+
+
 async function processPayments() {
     try {
         console.log("Fetching records from Airtable...");
@@ -629,8 +734,12 @@ async function processPayments() {
                     OR(
                         {Payment ID} = "",
                         NOT({Payment ID})
-                    )
-                )`,
+                    ),
+                    NOT({Client ID} = ""),
+                    NOT({Biaw Classes} = ""),
+                    {Number of seat Purchased} > 0,
+                    NOT({Airtable id} = "")
+                )`
             })
             .all();
 
@@ -644,33 +753,55 @@ async function processPayments() {
         for (const record of records) {
             console.log(`Processing record: ${record.id}`);
 
-            // Extract and validate necessary fields
+            // Extract necessary fields
             const email = record.get('Email');
             const amountTotalField = record.get('Amount Total');
             const paymentID = record.get('Payment ID');
-            const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0; // Extracted field
-            const classId1 = record.get('Biaw Classes'); // Assuming a field linking to the class
+            const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0;
+            const classId1 = record.get('Biaw Classes');
+
             const amountTotal = amountTotalField
-                ? parseFloat(amountTotalField.replace('$', '').trim()) * 100 // Convert to cents
+                ? parseFloat(amountTotalField.replace('$', '').trim()) * 100
                 : NaN;
 
             if (!email || isNaN(amountTotal) || seatsPurchased <= 0 || !classId1) {
                 console.log(
-                    `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
-                    { email, amountTotal, seatsPurchased, classId1 }
+                    `Skipping record due to missing or invalid data. Record ID: ${record.id}`
                 );
                 continue;
             }
 
             if (paymentID) {
-                console.log(
-                    `Skipping record: Payment already made. Record ID: ${record.id}, Payment ID: ${paymentID}`
-                );
+                console.log(`Skipping record: Payment already made. Record ID: ${record.id}`);
                 continue;
             }
 
             try {
-                // Here we're using Stripe's predefined test card (test card ID)
+                // Fetch linked class details to check "Number of seats remaining" and "Publish / Unpublish"
+                const linkedClass = await base(AIRTABLE_TABLE_NAME).find(classId1);
+
+                if (!linkedClass) {
+                    console.log(`Skipping record: Linked class not found for ${record.id}`);
+                    continue;
+                }
+
+                const seatsRemaining = linkedClass.get('Number of seats remaining');
+                const publishStatus = linkedClass.get('Publish / Unpublish');
+
+                if (seatsRemaining <= 0) {
+                    console.log(
+                        `Skipping record: No seats remaining for linked class ${classId}. Record ID: ${record.id}`
+                    );
+                    continue;
+                }
+
+                if (publishStatus === "Deleted") {
+                    console.log(
+                        `Skipping record: Linked class is marked as Deleted. Record ID: ${record.id}`
+                    );
+                    continue;
+                }
+
                 const testCardPaymentMethod = "pm_card_visa";  // This is the predefined test Payment Method ID
 
                 console.log(`Creating payment for ${email} with amount ${amountTotal} cents.`);
@@ -704,9 +835,46 @@ async function processPayments() {
 
                 // Update seats in the class
                 await updateSeatsInClass1(seatsPurchased, classId1);
+
+                // Send email after successful payment and record update
+                const transporter = nodemailer.createTransport({
+                    service: 'gmail',
+                    auth: {
+                        user: process.env.EMAIL_USER,
+                        pass: process.env.EMAIL_PASSWORD,
+                    },
+                });
+
+                const mailOptions = {
+                    from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+                    to: email,
+                    subject: `Class Registration Confirmation for ${record.get('Name (from Biaw Classes)')}`,
+                    html: `
+                        <p>Hi ${record.get('Name') || 'there'},</p>
+                        <p>You have successfully registered for the class. Here are the details:</p>
+                        <p>Your registration for the class <b>${record.get('Name (from Biaw Classes)')}</b> has been confirmed. Below are your details:</p>
+                        <ul>
+                            <li><b>Description:</b> ${record.get('Description')}</li>
+                            <li><b>Number of Seats Purchased:</b> ${seatsPurchased}</li>
+                            <li><b>Location:</b> ${record.get('Location (from Biaw Classes)')}</li>
+                            <li><b>Class URL:</b> <a href=${record.get('Purchased Class url')}>View Class Details</a></li>
+                        </ul>
+                        <p>We look forward to seeing you in class!</p>
+                        <p>Best regards,<br>BIAW Customer Support Team</p>
+                    `,
+                };
+
+                transporter.sendMail(mailOptions, (error, info) => {
+                    if (error) {
+                        console.error('Failed to send email:', error.message);
+                    } else {
+                        console.log(`Email sent to ${email}: ${info.response}`);
+                    }
+                });
+
             } catch (error) {
                 console.error(
-                    `Failed to create payment for ${email} or update Airtable. Error: ${error.message}`
+                    `Error processing record ${record.id}: ${error.message}`
                 );
             }
         }
@@ -716,7 +884,6 @@ async function processPayments() {
         );
     }
 }
-
 
   
   async function updateSeatsInClass1(seatsToAdjust1, classId1) {
@@ -778,8 +945,12 @@ async function processPayments() {
             filterByFormula: `AND(
                 {Booking Type} = "Admin booked",
                 {Payment Status} = "ROII-Free",
-                {ROII member} = ""
-            )`                       
+                {Self Purchase} = "",
+                {Client ID} != "",
+                {Biaw Classes} != "",
+                {Email} != "",
+                NOT({Airtable id} = "")
+            )`                                
           })
           .all();
   
@@ -807,10 +978,37 @@ async function processPayments() {
             }
 
             try {
+                // Fetch linked class details
+                const linkedClass = await base(AIRTABLE_TABLE_NAME).find(classId1);
+
+                if (!linkedClass) {
+                    console.log(`Skipping record: Linked class not found for ${record.id}`);
+                    continue;
+                }
+
+                const seatsRemaining2 = linkedClass.get('Number of seats remaining');
+                const publishStatus2 = linkedClass.get('Publish / Unpublish');
+
+                // Check if there are remaining seats and if the class is published
+                if (seatsRemaining2 <= 0) {
+                    console.log(
+                        `Skipping record: No seats remaining for linked class ${classId1}. Record ID: ${record.id}`
+                    );
+                    continue;
+                }
+
+                if (publishStatus2 === "Deleted") {
+                    console.log(
+                        `Skipping record: Linked class is marked as Deleted. Record ID: ${record.id}`
+                    );
+                    continue;
+                }
+
                 // Update Airtable record with Payment Status as "Paid" (optional)
                 await base(AIRTABLE_TABLE_NAME3).update(record.id, {
                     'Payment Status': 'ROII-Free',
-                    'ROII member':'Yes' // Optionally set this field to 'Paid' for tracking
+                    'ROII member': 'Yes',
+                    "Self Purchase" : "false" // Optionally set this field to 'Paid' for tracking
                 });
   
                 console.log(`Updated Airtable record ${record.id} with Payment Status 'Paid'.`);
@@ -857,6 +1055,7 @@ async function processPayments() {
         );
     }
 }
+
 
 async function runPeriodically22(intervalMs) {
     console.log("Starting Roii periodic sync...");
