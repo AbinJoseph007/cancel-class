@@ -47,6 +47,14 @@ app.get('/keep-alive', (req, res) => {
 });
 
 
+const transporter = nodemailer.createTransport({
+    service: 'gmail', // You can change the service based on your email provider
+    auth: {
+        user: process.env.EMAIL_USER, // Your email address
+        pass: process.env.EMAIL_PASSWORD, // Your email password
+    },
+});
+
 const airtableBase = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
 const biawClassesUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Biaw Classes`;
@@ -64,8 +72,13 @@ async function getRefundRequests() {
         const records = response.data.records.filter(record => {
             const paymentStatus = record.fields['Payment Status'];
             const refundConfirmation = record.fields['Refund Confirmation'];
+            const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
 
-            return paymentStatus === 'Refunded' && refundConfirmation === 'Confirmed';
+            return (
+                paymentStatus === 'Refunded' &&
+                refundConfirmation === 'Confirmed' &&
+                seatsPurchased > 0 // Exclude records with seatsPurchased = 0
+            );
         });
 
         return records;
@@ -201,6 +214,7 @@ async function handleRefunds() {
         const paymentIntentId = record.fields['Payment ID'];
         const classFieldValue = record.fields['Airtable id'];
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
+        const custEmail = record.fields['Email']
 
         // Skip if the record already reflects a refund
         if (
@@ -224,6 +238,25 @@ async function handleRefunds() {
 
                 await updateBiawClasses(seatsPurchased, classFieldValue);
                 await updateMultipleClassRegistrationPaymentStatus(record.id, 'Refunded');
+                if (custEmail) {
+                    const subject = 'Refund Processed Successfully';
+                    const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+        
+                    try {
+                        await transporter.sendMail({
+                            from: `"BIAW Support" <${process.env.EMAIL_USER}>`, // Sender's email address
+                            to: custEmail, // Recipient's email address
+                            subject, // Email subject
+                            text, // Email body
+                        });
+        
+                        console.log(`Email sent to ${custEmail} for refund request ID: ${record.id}`);
+                    } catch (error) {
+                        console.error(`Error sending email to ${custEmail}: ${error.message}`);
+                    }
+                } else {
+                    console.log(`No email address found for refund request ID: ${record.id}`);
+                }
             }
         } else {
             console.warn(`No Payment ID found for record: ${record.id}`);
@@ -248,8 +281,13 @@ async function fetchRefundRequests() {
         const records = response.data.records.filter(record => {
             const paymentStatus = record.fields['Payment Status'];
             const refundConfirmation = record.fields['Refund Confirmation'];
+            const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
 
-            return paymentStatus === 'ROII-Cancelled' && refundConfirmation === 'Confirmed';
+            return (
+                paymentStatus === 'ROII-Cancelled' &&
+                refundConfirmation === 'Confirmed' &&
+                seatsPurchased > 0 // Exclude records with seatsPurchased = 0
+            );
         });
 
         return records;
@@ -363,22 +401,46 @@ async function MultipleClassRegistrationPaymentStatus(recordId, newPaymentStatus
         console.error(`Error updating "Payment Status" for linked records: ${error.message}`);
     }
   }
-// Main function to handle refunds
+// Main function to handle refunds with email notifications
 async function processRefundRequests() {
     const refundRequests = await fetchRefundRequests();
 
     for (const record of refundRequests) {
         const classFieldValue = record.fields['Airtable id'];
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
+        const customerEmail = record.fields['Email']; // Assume the email field exists in Airtable
 
+        // Update refund confirmation and payment status
         await modifyAirtableRecord(record.id, {
             'Refund Confirmation': 'Confirmed',
             'Payment Status': 'ROII-Cancelled',
             'Number of seat Purchased': 0,
         });
 
+        // Adjust class seats and update related class registration payment statuses
         await adjustBiawClassSeats(seatsPurchased, classFieldValue);
         await MultipleClassRegistrationPaymentStatus(record.id, 'ROII-Cancelled');
+
+        // Send email notification
+        if (customerEmail) {
+            const subject = 'Refund Processed Successfully';
+            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+
+            try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER, // Sender's email address
+                    to: customerEmail, // Recipient's email address
+                    subject, // Email subject
+                    text, // Email body
+                });
+
+                console.log(`Email sent to ${customerEmail} for refund request ID: ${record.id}`);
+            } catch (error) {
+                console.error(`Error sending email to ${customerEmail}: ${error.message}`);
+            }
+        } else {
+            console.log(`No email address found for refund request ID: ${record.id}`);
+        }
     }
 }
 
@@ -396,8 +458,13 @@ async function getNonRefundedCancellations() {
         const records = response.data.records.filter(record => {
             const paymentStatus = record.fields['Payment Status'];
             const refundConfirmation = record.fields['Refund Confirmation'];
+            const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
 
-            return paymentStatus === 'Cancelled Without Refund' && refundConfirmation === 'Confirmed';
+            return (
+                paymentStatus === 'Cancelled Without Refund' &&
+                refundConfirmation === 'Confirmed' &&
+                seatsPurchased > 0 // Exclude records with seatsPurchased = 0
+            );
         });
 
         return records;
@@ -406,6 +473,7 @@ async function getNonRefundedCancellations() {
         return [];
     }
 }
+
 
 async function amendAirtableRecord(recordId, updatedFields) {
     try {
@@ -515,6 +583,7 @@ async function handleRefundProcessing() {
     for (const record of refundRequests) {
         const classFieldValue = record.fields['Airtable id'];
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
+        const custEmail2 = record.fields['Email']
 
         await amendAirtableRecord(record.id, {
             'Refund Confirmation': 'Confirmed',
@@ -524,13 +593,32 @@ async function handleRefundProcessing() {
 
         await updateSeatsInClass(seatsPurchased, classFieldValue);
         await updateClassStatuses(record.id, 'Cancelled Without Refund');
+        if (custEmail2) {
+            const subject = 'Refund Processed Successfully';
+            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+
+            try {
+                await transporter.sendMail({
+                    from: `"BIAW Support" <${process.env.EMAIL_USER}>`, // Sender's email address
+                    to: custEmail2, // Recipient's email address
+                    subject, // Email subject
+                    text, // Email body
+                });
+
+                console.log(`Email sent to ${custEmail2} for refund request ID: ${record.id}`);
+            } catch (error) {
+                console.error(`Error sending email to ${custEmail2}: ${error.message}`);
+            }
+        } else {
+            console.log(`No email address found for refund request ID: ${record.id}`);
+        }
     }
 }
 
 
 const tasks = [
     { name: "processRefundRequests", task: processRefundRequests },
-    { name: "handleRefundProcessing", task: handleRefundProcessing },
+    { name: "handleROIIProcessing", task: handleRefundProcessing },
     { name: "handleRefunds", task: handleRefunds },
 ];
 
