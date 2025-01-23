@@ -707,31 +707,40 @@ async function processRows() {
 
 app.post('/api/cancelclass', async (req, res) => {
     try {
-        // Extract data from the request body
+        // Check if data is provided in the request body
+        if (!req.body || typeof req.body !== 'object') {
+            console.error('No data received in the request body.');
+            return res.status(400).send({ error: 'No data received in the request body.' });
+        }
+
+        // Extract data and validate fields
         const data = req.body;
         const {
             id: recordId,
-            fields: {
-                'Payment ID': paymentIntentId,
-                Email: custEmail,
-                'Airtable id': classFieldValue,
-                'Number of seat Purchased': seatsPurchased = 0,
-                'Refund Confirmation': refundConfirmation,
-                'Payment Status': paymentStatus,
-            },
+            fields = {},
         } = data;
 
-        // Ensure required fields are present
+        const {
+            'Payment ID': paymentIntentId,
+            Email: custEmail,
+            'Airtable id': classFieldValue,
+            'Number of seat Purchased': seatsPurchased = 0,
+            'Refund Confirmation': refundConfirmation,
+            'Payment Status': paymentStatus,
+        } = fields;
+
+        // Validate required fields
         if (!recordId || !paymentIntentId || !classFieldValue || !refundConfirmation || !paymentStatus) {
+            console.error('Missing required fields in the request data:', data);
             return res.status(400).send({ error: 'Missing required fields in the request data.' });
         }
 
         console.log('Processing cancellation for record:', recordId);
 
-        // Check if refund is confirmed and payment status is refunded
+        // Check refund confirmation and payment status
         if (refundConfirmation.name !== 'Confirmed' || paymentStatus.name !== 'Refunded') {
-            console.warn(`Refund confirmation or payment status not valid for record: ${recordId}`);
-            return res.status(400).send({ error: 'Refund confirmation or payment status is not valid.' });
+            console.warn(`Invalid refund confirmation or payment status for record: ${recordId}`);
+            return res.status(400).send({ error: 'Refund confirmation or payment status is invalid.' });
         }
 
         // Process Stripe refund
@@ -746,7 +755,7 @@ app.post('/api/cancelclass', async (req, res) => {
 
         // Update Airtable Refund Table
         try {
-            await axios.patch(`${AIRTABLE_REFUND_TABLE_URL}/${recordId}`, {
+            await axios.patch(`${AIRTABLE_TABLE_NAME3}/${recordId}`, {
                 fields: {
                     'Refund Confirmation': 'Confirmed',
                     'Payment Status': 'Refunded',
@@ -764,7 +773,7 @@ app.post('/api/cancelclass', async (req, res) => {
 
         // Update Biaw Classes Table
         try {
-            const classRecordResponse = await axios.get(`${AIRTABLE_CLASSES_TABLE_URL}?filterByFormula={Field ID}='${classFieldValue}'`, {
+            const classRecordResponse = await axios.get(`${AIRTABLE_TABLE_NAME}?filterByFormula={Field ID}='${classFieldValue}'`, {
                 headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
             });
 
@@ -776,7 +785,7 @@ app.post('/api/cancelclass', async (req, res) => {
                 const updatedRemainingSeats = currentRemainingSeats + seatsPurchased;
                 const updatedTotalPurchasedSeats = currentTotalPurchasedSeats - seatsPurchased;
 
-                await axios.patch(`${AIRTABLE_CLASSES_TABLE_URL}/${classRecord.id}`, {
+                await axios.patch(`${AIRTABLE_TABLE_NAME}/${classRecord.id}`, {
                     fields: {
                         'Number of seats remaining': updatedRemainingSeats,
                         'Total Number of Purchased Seats': updatedTotalPurchasedSeats,
@@ -797,7 +806,7 @@ app.post('/api/cancelclass', async (req, res) => {
         // Send Email Notification
         if (custEmail) {
             const subject = 'Refund Processed Successfully';
-            const text = `Dear ${data.fields.Name},\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+            const text = `Dear ${fields.Name},\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
 
             try {
                 await transporter.sendMail({
@@ -821,7 +830,6 @@ app.post('/api/cancelclass', async (req, res) => {
         res.status(500).send({ error: 'An internal server error occurred.' });
     }
 });
-
 
 // Run the function at regular intervals
 setInterval(() => {
