@@ -705,7 +705,7 @@ async function processRows() {
 // });
 
 
-router.post('/api/cancelclass', async (req, res) => {
+app.post('/api/cancelclass', async (req, res) => {
     try {
         // Extract data from the request body
         const data = req.body;
