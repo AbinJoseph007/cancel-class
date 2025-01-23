@@ -694,14 +694,132 @@ async function processRows() {
 }
 
 
-app.post("/api/cancelclass", (req, res) => {
-  const { id, fields } = req.body;
+// app.post("/api/cancelclass", (req, res) => {
+//   const { id, fields } = req.body;
 
-  // Log or process the received data
-  console.log("Received data:", { id, fields });
+//   // Log or process the received data
+//   console.log("Received data:", { id, fields });
 
-  // Send a response
-  res.status(200).json({ message: "Data received successfully" });
+//   // Send a response
+//   res.status(200).json({ message: "Data received successfully" });
+// });
+
+
+router.post('/api/cancelclass', async (req, res) => {
+    try {
+        // Extract data from the request body
+        const data = req.body;
+        const {
+            id: recordId,
+            fields: {
+                'Payment ID': paymentIntentId,
+                Email: custEmail,
+                'Airtable id': classFieldValue,
+                'Number of seat Purchased': seatsPurchased = 0,
+                'Refund Confirmation': refundConfirmation,
+                'Payment Status': paymentStatus,
+            },
+        } = data;
+
+        // Ensure required fields are present
+        if (!recordId || !paymentIntentId || !classFieldValue || !refundConfirmation || !paymentStatus) {
+            return res.status(400).send({ error: 'Missing required fields in the request data.' });
+        }
+
+        console.log('Processing cancellation for record:', recordId);
+
+        // Check if refund is confirmed and payment status is refunded
+        if (refundConfirmation.name !== 'Confirmed' || paymentStatus.name !== 'Refunded') {
+            console.warn(`Refund confirmation or payment status not valid for record: ${recordId}`);
+            return res.status(400).send({ error: 'Refund confirmation or payment status is not valid.' });
+        }
+
+        // Process Stripe refund
+        let refund = null;
+        try {
+            refund = await stripe.refunds.create({ payment_intent: paymentIntentId });
+            console.log(`Refund successful for Payment Intent: ${paymentIntentId}`);
+        } catch (error) {
+            console.error(`Stripe refund error for Payment Intent ${paymentIntentId}: ${error.message}`);
+            return res.status(500).send({ error: 'Failed to process refund via Stripe.' });
+        }
+
+        // Update Airtable Refund Table
+        try {
+            await axios.patch(`${AIRTABLE_REFUND_TABLE_URL}/${recordId}`, {
+                fields: {
+                    'Refund Confirmation': 'Confirmed',
+                    'Payment Status': 'Refunded',
+                    'Number of seat Purchased': 0,
+                },
+            }, {
+                headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+            });
+
+            console.log(`Updated refund record in Airtable: ${recordId}`);
+        } catch (error) {
+            console.error(`Error updating refund record in Airtable: ${error.message}`);
+            return res.status(500).send({ error: 'Failed to update refund record in Airtable.' });
+        }
+
+        // Update Biaw Classes Table
+        try {
+            const classRecordResponse = await axios.get(`${AIRTABLE_CLASSES_TABLE_URL}?filterByFormula={Field ID}='${classFieldValue}'`, {
+                headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+            });
+
+            const classRecord = classRecordResponse.data.records[0];
+            if (classRecord) {
+                const currentRemainingSeats = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
+                const currentTotalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'], 10) || 0;
+
+                const updatedRemainingSeats = currentRemainingSeats + seatsPurchased;
+                const updatedTotalPurchasedSeats = currentTotalPurchasedSeats - seatsPurchased;
+
+                await axios.patch(`${AIRTABLE_CLASSES_TABLE_URL}/${classRecord.id}`, {
+                    fields: {
+                        'Number of seats remaining': updatedRemainingSeats,
+                        'Total Number of Purchased Seats': updatedTotalPurchasedSeats,
+                    },
+                }, {
+                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                });
+
+                console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+            } else {
+                console.warn(`Class record not found for ID: ${classFieldValue}`);
+            }
+        } catch (error) {
+            console.error(`Error updating Biaw Classes table: ${error.message}`);
+            return res.status(500).send({ error: 'Failed to update Biaw Classes table in Airtable.' });
+        }
+
+        // Send Email Notification
+        if (custEmail) {
+            const subject = 'Refund Processed Successfully';
+            const text = `Dear ${data.fields.Name},\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+
+            try {
+                await transporter.sendMail({
+                    from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+                    to: custEmail,
+                    subject,
+                    text,
+                });
+
+                console.log(`Email sent to ${custEmail} for refund request ID: ${recordId}`);
+            } catch (error) {
+                console.error(`Error sending email to ${custEmail}: ${error.message}`);
+                return res.status(500).send({ error: 'Failed to send email notification.' });
+            }
+        }
+
+        // Respond to the API call
+        res.send({ success: true, message: 'Refund and updates processed successfully.' });
+    } catch (error) {
+        console.error('Error in /api/cancelclass:', error.message);
+        res.status(500).send({ error: 'An internal server error occurred.' });
+    }
 });
 
 
