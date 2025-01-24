@@ -964,10 +964,139 @@ setInterval(() => {
 //     }
 // }
 
+// async function processPayments() {
+//     try {
+//         console.log("Fetching records from Airtable...");
+  
+//         // Fetch records with filtering
+//         const records = await base(AIRTABLE_TABLE_NAME3)
+//             .select({
+//                 filterByFormula: `AND(
+//                     {Booking Type} = "Admin booked",
+//                     {Payment Status} = "Paid",
+//                     {Self Purchase} = "",
+//                     {Member ID (from User ID)} != "",
+//                     {Biaw Classes} != "",
+//                     {Email} != "",
+//                     NOT({Airtable id} = ""),
+//                     OR(
+//                         {Admin class booking} = "",
+//                         {Admin class booking} = "Rejected"
+//                     )
+//                 )`
+//             })
+//             .all();
+  
+//         if (records.length === 0) {
+//             console.log("No records found matching the filter.");
+//             return;
+//         }
+  
+//         console.log(`Found ${records.length} records matching the filter.`);
+  
+//         for (const record of records) {
+//             console.log(`Processing record: ${record.id}`);
+  
+//             const email = record.get('Email');
+//             const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0;
+//             const classId1 = record.get('Biaw Classes');
+
+//             if (!email || seatsPurchased <= 0 || !classId1) {
+//                 console.log(
+//                     `Skipping record due to missing or invalid data. Record ID: ${record.id}`,
+//                     { email, seatsPurchased, classId1 }
+//                 );
+//                 continue;
+//             }
+
+//             try {
+//                 // Fetch linked class details
+//                 const linkedClass = await base(AIRTABLE_TABLE_NAME).find(classId1);
+
+//                 if (!linkedClass) {
+//                     console.log(`Skipping record: Linked class not found for ${record.id}`);
+//                     continue;
+//                 }
+
+//                 const seatsRemaining1 = linkedClass.get('Number of seats remaining');
+//                 const publishStatus1 = linkedClass.get('Publish / Unpublish');
+
+//                 // Check if there are remaining seats or the class is marked as Deleted
+//                 if (seatsRemaining1 <= 0 || publishStatus1 === "Deleted") {
+//                     console.log(
+//                         `Skipping record: Either no seats remaining or linked class is marked as Deleted. Record ID: ${record.id}`
+//                     );
+
+//                     // Update "Admin class booking" to "Rejected"
+//                     await base(AIRTABLE_TABLE_NAME3).update(record.id, {
+//                         "Admin class booking": "Rejected"
+//                     });
+//                     continue;
+//                 }
+
+//                 // Update Airtable record with Payment Status as "Paid"
+//                 await base(AIRTABLE_TABLE_NAME3).update(record.id, {
+//                     'Payment Status': 'Paid',
+//                     'ROII member': 'No',
+//                     "Self Purchase": "false",
+//                     "Admin class booking": "Completed"
+//                 });
+
+//                 console.log(`Updated Airtable record ${record.id} with Payment Status 'Paid'.`);
+
+//                 // Fetch class record and update seats
+//                 const classRecord1 = await base(AIRTABLE_TABLE_NAME).find(classId1);
+
+//                 if (classRecord1) {
+//                     const currentRemainingSeats1 = parseInt(classRecord1.fields['Number of seats remaining'], 10) || 0;
+//                     const currentTotalPurchasedSeats1 = parseInt(classRecord1.fields['Total Number of Purchased Seats'], 10) || 0;
+
+//                     const updatedRemainingSeats1 = (currentRemainingSeats1 - seatsPurchased).toString();
+//                     const updatedTotalSeats1 = (currentTotalPurchasedSeats1 + seatsPurchased).toString();
+
+//                     console.log('Updating Biaw Classes:', {
+//                         'Number of seats remaining': updatedRemainingSeats1,
+//                         'Total Number of Purchased Seats': updatedTotalSeats1,
+//                     });
+
+//                     await axios.patch(`${biawClassesUrl}/${classRecord1.id}`, {
+//                         fields: {
+//                             'Number of seats remaining': updatedRemainingSeats1,
+//                             'Total Number of Purchased Seats': updatedTotalSeats1,
+//                         },
+//                     }, {
+//                         headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+//                     });
+
+//                     console.log(`Updated Biaw Classes record: ${classRecord1.id}`);
+//                 }
+//             } catch (error) {
+//                 console.error(
+//                     `Failed to update Airtable or adjust class seats. Error: ${error.message}`
+//                 );
+//             }
+//         }
+//     } catch (error) {
+//         console.error(
+//             `Error fetching records or processing payments: ${error.message}`
+//         );
+//     }
+// }
+
+
 async function processPayments() {
     try {
         console.log("Fetching records from Airtable...");
-  
+
+        // Setup NodeMailer transporter
+        const transporter = nodemailer.createTransport({
+            service: 'gmail', // or another email service (e.g., Yahoo, Outlook)
+            auth: {
+                user: process.env.EMAIL_USER, // Your email
+                pass: process.env.EMAIL_PASSWORD, // Your email password or app password
+            },
+        });
+
         // Fetch records with filtering
         const records = await base(AIRTABLE_TABLE_NAME3)
             .select({
@@ -986,17 +1115,17 @@ async function processPayments() {
                 )`
             })
             .all();
-  
+
         if (records.length === 0) {
             console.log("No records found matching the filter.");
             return;
         }
-  
+
         console.log(`Found ${records.length} records matching the filter.`);
-  
+
         for (const record of records) {
             console.log(`Processing record: ${record.id}`);
-  
+
             const email = record.get('Email');
             const seatsPurchased = parseInt(record.get('Number of seat Purchased'), 10) || 0;
             const classId1 = record.get('Biaw Classes');
@@ -1070,9 +1199,33 @@ async function processPayments() {
 
                     console.log(`Updated Biaw Classes record: ${classRecord1.id}`);
                 }
+
+                // Send email confirmation
+                const emailSubject = 'Booking Confirmation';
+                const emailBody = `
+                    Dear Customer,
+
+                    Thank you for your booking. Here are your details:
+                    - Class: ${classId1}
+                    - Seats Purchased: ${seatsPurchased}
+
+                    We look forward to seeing you at the class.
+
+                    Regards,
+                    Your Team
+                `;
+
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: email,
+                    subject: emailSubject,
+                    text: emailBody,
+                });
+
+                console.log(`Confirmation email sent to ${email}.`);
             } catch (error) {
                 console.error(
-                    `Failed to update Airtable or adjust class seats. Error: ${error.message}`
+                    `Failed to update Airtable, adjust class seats, or send email. Error: ${error.message}`
                 );
             }
         }
@@ -1082,6 +1235,7 @@ async function processPayments() {
         );
     }
 }
+
 
 processPayments()
 
