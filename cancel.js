@@ -1111,7 +1111,7 @@ async function processPayments() {
                     {Member ID (from User ID)} != "",
                     {Biaw Classes} != "",
                     {Email} != "",
-                    NOT({Airtable id} = ""),
+                    NOT({Field ID (from Biaw Classes)} = ""),
                     OR(
                         {Admin class booking} = "",
                         {Admin class booking} = "Rejected"
@@ -1278,7 +1278,7 @@ async function processPayments1() {
                     {Member ID (from User ID)} != "",
                     {Biaw Classes} != "",
                     {Email} != "",
-                    NOT({Airtable id} = "")
+                    NOT({Field ID (from Biaw Classes)} = "")
                 )`
             })
             .all();
