@@ -911,7 +911,8 @@ setInterval(() => {
                 await base(AIRTABLE_TABLE_NAME3).update(record.id, {
                     'Payment Status': 'ROII-Free',
                     'ROII member': 'Yes',
-                    "Self Purchase" : "false" // Optionally set this field to 'Paid' for tracking
+                    "Self Purchase" : "false",
+                    "Admin class booking":"Completed" // Optionally set this field to 'Paid' for tracking
                 });
   
                 console.log(`Updated Airtable record ${record.id} with Payment Status 'Paid'.`);
