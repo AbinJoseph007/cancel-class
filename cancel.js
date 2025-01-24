@@ -317,34 +317,34 @@ async function modifyAirtableRecord(recordId, fields) {
 }
 
 // Function to fetch the class record from the "Biaw Classes" table
-async function fetchClassRecord(classFieldValue) {
+async function fetchClassRecord(memberid1) {
     try {
         const classRecords = await airtableBase("Biaw Classes")
             .select({
-                filterByFormula: `{Field ID} = '${classFieldValue}'`,
+                filterByFormula: `{Field ID} = '${memberid1}'`,
                 maxRecords: 1,
             })
             .firstPage();
 
         if (classRecords.length === 0) {
-            console.log(`Class record not found in Biaw Classes table for ID: ${classFieldValue}.`);
+            console.log(`Class record not found in Biaw Classes table for ID: ${memberid1}.`);
             return null;
         }
 
-        console.log(`Class record found for ID: ${classFieldValue}.`);
+        console.log(`Class record found for ID: ${memberid1}.`);
         return classRecords[0];
     } catch (error) {
         console.error(`Error fetching class record: ${error.message}`);
-        console.log(classFieldValue);
+        console.log(memberid1);
 
         return null;
     }
 }
 
 // Function to update Biaw Classes table dynamically based on seats
-async function adjustBiawClassSeats(seatsPurchased, classFieldValue) {
+async function adjustBiawClassSeats(seatsPurchased, memberid1) {
     try {
-        const classRecord = await fetchClassRecord(classFieldValue);
+        const classRecord = await fetchClassRecord(memberid1);
 
         if (classRecord) {
             const currentRemainingSeats = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
@@ -407,8 +407,10 @@ async function processRefundRequests() {
     const refundRequests = await fetchRefundRequests();
 
     for (const record of refundRequests) {
-        const classFieldValue = record.fields['Airtable id'];
+        // const classFieldValue = record.fields['Airtable id'];
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
+        const memberid1 = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
+
         const customerEmail = record.fields['Email']; // Assume the email field exists in Airtable
 
         // Update refund confirmation and payment status
@@ -419,7 +421,7 @@ async function processRefundRequests() {
         });
 
         // Adjust class seats and update related class registration payment statuses
-        await adjustBiawClassSeats(seatsPurchased, classFieldValue);
+        await adjustBiawClassSeats(seatsPurchased, memberid1);
         await MultipleClassRegistrationPaymentStatus(record.id, 'ROII-Cancelled');
 
         // Send email notification
@@ -582,7 +584,8 @@ async function handleRefundProcessing() {
     const refundRequests = await getNonRefundedCancellations();
 
     for (const record of refundRequests) {
-        const classFieldValue = record.fields['Airtable id'];
+        // const classFieldValue = record.fields['Airtable id'];
+        const memberid2 = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
         const custEmail2 = record.fields['Email']
 
@@ -592,7 +595,7 @@ async function handleRefundProcessing() {
             'Number of seat Purchased': 0,
         });
 
-        await updateSeatsInClass(seatsPurchased, classFieldValue);
+        await updateSeatsInClass(seatsPurchased, memberid2);
         await updateClassStatuses(record.id, 'Cancelled Without Refund');
         if (custEmail2) {
             const subject = 'Refund Processed Successfully';
