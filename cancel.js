@@ -939,7 +939,7 @@ async function processPayments() {
                     });
 
                     // Update Airtable record with new values
-                    await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+                    await axios.patch(`${biawClassesUrl}/${classRecord1.id}`, {
                         fields: {
                             'Number of seats remaining': updatedRemainingSeats1,
                             'Total Number of Purchased Seats': updatedTotalSeats1,
