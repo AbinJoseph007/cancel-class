@@ -430,7 +430,7 @@ async function processRefundRequests() {
 
         // Send email notification
         if (customerEmail) {
-            const subject = 'Refund Processed Successfully';
+            const subject = 'Class cancellation Successfully';
             const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
 
             try {
@@ -908,7 +908,7 @@ BIAW Support Team
                 `;
 
                 await transporter.sendMail({
-                    from: process.env.EMAIL_USER,
+                    from:`"BIAW Support" <${process.env.EMAIL_USER}>`,
                     to: email,
                     subject: emailSubject,
                     text: emailBody,
