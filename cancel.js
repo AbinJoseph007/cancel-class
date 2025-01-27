@@ -431,7 +431,7 @@ async function processRefundRequests() {
         // Send email notification
         if (customerEmail) {
             const subject = 'Class cancellation Successfully';
-            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nBIAW Support`;
 
             try {
                 await transporter.sendMail({
@@ -603,7 +603,7 @@ async function handleRefundProcessing() {
         await updateClassStatuses(record.id, 'Cancelled Without Refund');
         if (custEmail2) {
             const subject = 'Refund Processed Successfully';
-            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nBIAW Support`;
 
             try {
                 await transporter.sendMail({
@@ -790,13 +790,13 @@ async function processPayments() {
                     continue;
                 }
 
-                const seatsRemaining1 = linkedClass.get('Number of seats remaining');
+                const seatsRemaining1 = parseInt(linkedClass.get('Number of seats remaining'), 10) || 0;
                 const publishStatus1 = linkedClass.get('Publish / Unpublish');
 
-                // Check if there are remaining seats or the class is marked as Deleted
-                if (seatsRemaining1 <= 0 || publishStatus1 === "Deleted") {
+                // Check if there are remaining seats, the class is marked as Deleted, or purchased seats exceed remaining seats
+                if (seatsRemaining1 <= 0 || publishStatus1 === "Deleted" || seatsPurchased > seatsRemaining1) {
                     console.log(
-                        `Skipping record: Either no seats remaining or linked class is marked as Deleted. Record ID: ${record.id}`
+                        `Skipping record: Either no seats remaining, class is marked as Deleted, or purchased seats exceed available seats. Record ID: ${record.id}`
                     );
 
                     // Check if already marked as "Rejected"
@@ -810,9 +810,9 @@ async function processPayments() {
                         const rejectionBody = `
 Dear ${name},
 
-We regret to inform you that your booking for the class could not be processed due to either unavailability of seats or the cancellation of the class.
+We regret to inform you that your booking for the class could not be processed due to either unavailability of seats, the cancellation of the class, or the requested seats exceeding the available seats.
 
-We will let you know when seats are available
+We will let you know when seats are available.
 
 We sincerely apologize for any inconvenience this may have caused and appreciate your understanding. Please feel free to contact our support team if you have any questions or require further assistance.
 
@@ -904,11 +904,11 @@ Description: ${description}
 We look forward to seeing you at the class. Should you have any questions or need further assistance, please don’t hesitate to contact us.
 
 Best regards,
-BIAW Support Team
+BIAW Support
                 `;
 
                 await transporter.sendMail({
-                    from:`"BIAW Support" <${process.env.EMAIL_USER}>`,
+                    from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
                     to: email,
                     subject: emailSubject,
                     text: emailBody,
@@ -929,6 +929,7 @@ BIAW Support Team
 }
 
 processPayments();
+
 
 
 
