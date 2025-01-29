@@ -66,8 +66,7 @@ function isStripePayment(paymentId) {
     return typeof paymentId === "string" && paymentId.startsWith("pi_");
 }
 
-
-
+//refund
 app.post("/api/refund", async (req, res) => {
     try {
         const { id, fields } = req.body;
@@ -194,11 +193,10 @@ app.post("/api/refund", async (req, res) => {
     }
 });
 
-
 //function  ROII cancelled
 const multipleClassRegistrationUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}`;
 
-// POST request to handle refund
+// POST request to handle Roii cancelation
 app.post("/api/roiicancel", async (req, res) => {
     try {
         const { id, fields } = req.body;
@@ -303,7 +301,7 @@ app.post("/api/roiicancel", async (req, res) => {
     }
 });
 
-
+//refund without cancelation
 app.post("/api/without", async (req, res) => {
     try {
         const { id, fields } = req.body;
@@ -407,8 +405,6 @@ app.post("/api/without", async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 });
-
-
 
 
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
