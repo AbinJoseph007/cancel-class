@@ -194,17 +194,6 @@ app.post("/api/refund", async (req, res) => {
     }
 });
 
-// app.post("/api/refund", (req, res) => {
-//   const { id, fields } = req.body;
-
-//   // Log or process the received data
-//   console.log("Received data:", { id, fields });
-
-//   // Send a response
-//   res.status(200).json({ message: "Data received successfully" });
-// });
-
-
 
 //function  ROII cancelled
 const multipleClassRegistrationUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}`;
