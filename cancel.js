@@ -475,18 +475,6 @@ async function processRows() {
   }
 }
 
-
-// app.post("/api/cancelclass", (req, res) => {
-//   const { id, fields } = req.body;
-
-//   // Log or process the received data
-//   console.log("Received data:", { id, fields });
-
-//   // Send a response
-//   res.status(200).json({ message: "Data received successfully" });
-// });
-
-
 // Run the function at regular intervals
 setInterval(() => {
   console.log('Checking for updates...');
