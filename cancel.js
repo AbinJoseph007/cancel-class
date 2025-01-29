@@ -532,7 +532,7 @@ app.post("/api/without", async (req, res) => {
             await axios.patch(`${airtableUrl}/${id}`, {
                 fields: {
                     "Refund Confirmation": "Confirmed",
-                    "Payment Status": "ROII-Cancelled",
+                    "Payment Status": "Cancelled Without Refund",
                     "Number of seat Purchased": 0,
                 },
             }, {
@@ -580,7 +580,7 @@ app.post("/api/without", async (req, res) => {
             if (multipleClassId) {
                 try {
                     await axios.patch(`${multipleClassRegistrationUrl}/${multipleClassId}`, {
-                        fields: { "Payment Status": "ROII-Cancelled" },
+                        fields: { "Payment Status": "Cancelled Without Refund" },
                     }, {
                         headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
                     });
