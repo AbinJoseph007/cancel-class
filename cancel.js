@@ -365,17 +365,22 @@ app.post("/api/refund", async (req, res) => {
 
         // Update linked multiple class registrations
         const multipleClassRegistrationIds = fields["Multiple Class Registration"] || [];
-        for (const multipleClassId of multipleClassRegistrationIds) {
-            try {
-                await axios.patch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${multipleClassId}`, {
-                    fields: { "Payment Status": "Refunded" },
-                }, {
-                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-                });
+        for (const multipleClassIdObj of multipleClassRegistrationIds) {
+            // If multipleClassIdObj is an object, extract the ID
+            const multipleClassId = multipleClassIdObj.id || multipleClassIdObj;  // Access the 'id' property if it's an object, or use the value directly
 
-                console.log(`Updated Payment Status for Multiple Class Registration ID: ${multipleClassId}`);
-            } catch (error) {
-                console.error(`Error updating Multiple Class Registration ID: ${multipleClassId}:`, error.message);
+            if (multipleClassId) {
+                try {
+                    await axios.patch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Multiple Class Registration/${multipleClassId}`, {
+                        fields: { "Payment Status": "Refunded" },
+                    }, {
+                        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                    });
+
+                    console.log(`Updated Payment Status for Multiple Class Registration ID: ${multipleClassId}`);
+                } catch (error) {
+                    console.error(`Error updating Multiple Class Registration ID: ${multipleClassId}:`, error.message);
+                }
             }
         }
 
@@ -403,7 +408,6 @@ app.post("/api/refund", async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 });
-
 
 // app.post("/api/refund", (req, res) => {
 //   const { id, fields } = req.body;
