@@ -315,203 +315,308 @@ app.post("/api/roiicancel", async (req, res) => {
 });
 
 
-async function getNonRefundedCancellations() {
+// async function getNonRefundedCancellations() {
+//     try {
+//         const response = await axios.get(airtableUrl, {
+//             headers: {
+//                 Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+//             },
+//         });
+
+//         const records = response.data.records.filter(record => {
+//             const paymentStatus = record.fields['Payment Status'];
+//             const refundConfirmation = record.fields['Refund Confirmation'];
+//             const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
+
+//             return (
+//                 paymentStatus === 'Cancelled Without Refund' &&
+//                 refundConfirmation === 'Confirmed' &&
+//                 seatsPurchased > 0 // Exclude records with seatsPurchased = 0
+//             );
+//         });
+
+//         return records;
+//     } catch (error) {
+//         console.error(`Error fetching Airtable records: ${error.response?.data || error.message}`);
+//         return [];
+//     }
+// }
+
+
+// async function amendAirtableRecord(recordId, updatedFields) {
+//     try {
+//         console.log(`Updating record: ${recordId} with fields:`, updatedFields);
+//         const response = await axios.patch(`${airtableUrl}/${recordId}`, {
+//             fields: updatedFields,
+//         }, {
+//             headers: {
+//                 Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+//             },
+//         });
+
+//         console.log(`Updated Airtable record: ${recordId}`);
+//     } catch (error) {
+//         console.error(`Error updating Airtable: ${JSON.stringify(error.response?.data || error.message)}`);
+//     }
+// }
+
+// async function getClassDetails(classId) {
+//     try {
+//         const classRecords = await airtableBase("Biaw Classes")
+//             .select({
+//                 filterByFormula: `{Field ID} = '${classId}'`,
+//                 maxRecords: 1,
+//             })
+//             .firstPage();
+
+//         if (classRecords.length === 0) {
+//             console.log(`Class record not found in Biaw Classes table for ID: ${classId}.`);
+//             return null;
+//         }
+
+//         console.log(`Class record found for ID: ${classId}.`);
+//         return classRecords[0];
+//     } catch (error) {
+//         console.error(`Error fetching class record: ${error.message}`);
+//         console.log(classId);
+
+//         return null;
+//     }
+// }
+
+// async function updateSeatsInClass(seatsToAdjust, classId) {
+//     try {
+//         const classRecord = await getClassDetails(classId);
+
+//         if (classRecord) {
+//             const currentRemainingSeats = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
+//             const currentTotalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'], 10) || 0;
+
+//             const updatedRemainingSeats = (currentRemainingSeats + seatsToAdjust).toString();
+//             const updatedTotalSeats = (currentTotalPurchasedSeats - seatsToAdjust).toString();
+
+//             console.log('Updating Biaw Classes:', {
+//                 'Number of seats remaining': updatedRemainingSeats,
+//                 'Total Number of Purchased Seats': updatedTotalSeats,
+//             });
+
+//             await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+//                 fields: {
+//                     'Number of seats remaining': updatedRemainingSeats,
+//                     'Total Number of Purchased Seats': updatedTotalSeats,
+//                 },
+//             }, {
+//                 headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+//             });
+
+//             console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+//         }
+//     } catch (error) {
+//         console.error(`Error updating Biaw Classes: ${JSON.stringify(error.response?.data || error.message)}`);
+//     }
+// }
+
+
+// async function updateClassStatuses(recordId, newStatus) {
+//     try {
+//         const recordResponse = await axios.get(`${airtableUrl}/${recordId}`, {
+//             headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+//         });
+  
+//         const linkedClassIds = recordResponse.data.fields["Multiple Class Registration"] || [];
+  
+//         for (const classId of linkedClassIds) {
+//             const classUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${classId}`;
+  
+//             await axios.patch(
+//                 classUrl,
+//                 {
+//                     fields: {
+//                         "Payment Status": newStatus,
+//                     },
+//                 },
+//                 { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
+//             );
+  
+//             console.log(`Updated Payment Status for Multiple Class Registration ID: ${classId}`);
+//         }
+//     } catch (error) {
+//         console.error(`Error updating "Payment Status" for linked records: ${error.message}`);
+//     }
+// }
+
+// async function handleRefundProcessing() {
+//     const refundRequests = await getNonRefundedCancellations();
+
+//     for (const record of refundRequests) {
+//         // const classFieldValue = record.fields['Airtable id'];
+//         const memberid2 = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
+//         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
+//         const custEmail2 = record.fields['Email']
+
+//          // Check if "Biaw Classes" data is available; skip if not
+//          if (!memberid2 || memberid2 === "No details provided") {
+//             console.log(`Skipping record ${record.id}. "Biaw Classes" data unavailable for member ID: ${memberid2}`);
+//             continue;
+//         }
+
+//         await amendAirtableRecord(record.id, {
+//             'Refund Confirmation': 'Confirmed',
+//             'Payment Status': 'Cancelled Without Refund',
+//             'Number of seat Purchased': 0,
+//         });
+
+//         await updateSeatsInClass(seatsPurchased, memberid2);
+//         await updateClassStatuses(record.id, 'Cancelled Without Refund');
+//         if (custEmail2) {
+//             const subject = 'Refund Processed Successfully';
+//             const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nBIAW Support`;
+
+//             try {
+//                 await transporter.sendMail({
+//                     from: `"BIAW Support" <${process.env.EMAIL_USER}>`, // Sender's email address
+//                     to: custEmail2, // Recipient's email address
+//                     subject, // Email subject
+//                     text, // Email body
+//                 });
+
+//                 console.log(`Email sent to ${custEmail2} for refund request ID: ${record.id}`);
+//             } catch (error) {
+//                 console.error(`Error sending email to ${custEmail2}: ${error.message}`);
+//             }
+//         } else {
+//             console.log(`No email address found for refund request ID: ${record.id}`);
+//         }
+//     }
+// }
+
+
+// const tasks = [
+//     // { name: "processRefundRequests", task: processRefundRequests },
+//     // { name: "handleROIIProcessing", task: handleRefundProcessing },
+//     // { name: "handleRefunds", task: handleRefunds },
+// ];
+
+// async function runScheduler(tasks, intervalMs) {
+//     console.log("Starting unified task scheduler...");
+//     setInterval(async () => {
+//         for (const { name, task } of tasks) {
+//             console.log(`Running task: ${name} at ${new Date().toISOString()}`);
+//             try {
+//                 await task();
+//             } catch (error) {
+//                 console.error(`Error in task ${name}:`, error.message || error);
+//             }
+//         }
+//     }, intervalMs);
+// }
+
+// runScheduler(tasks, 30000);
+
+app.post("/api/without", async (req, res) => {
     try {
-        const response = await axios.get(airtableUrl, {
-            headers: {
-                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            },
-        });
+        const { id, fields } = req.body;
 
-        const records = response.data.records.filter(record => {
-            const paymentStatus = record.fields['Payment Status'];
-            const refundConfirmation = record.fields['Refund Confirmation'];
-            const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
-
-            return (
-                paymentStatus === 'Cancelled Without Refund' &&
-                refundConfirmation === 'Confirmed' &&
-                seatsPurchased > 0 // Exclude records with seatsPurchased = 0
-            );
-        });
-
-        return records;
-    } catch (error) {
-        console.error(`Error fetching Airtable records: ${error.response?.data || error.message}`);
-        return [];
-    }
-}
-
-
-async function amendAirtableRecord(recordId, updatedFields) {
-    try {
-        console.log(`Updating record: ${recordId} with fields:`, updatedFields);
-        const response = await axios.patch(`${airtableUrl}/${recordId}`, {
-            fields: updatedFields,
-        }, {
-            headers: {
-                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            },
-        });
-
-        console.log(`Updated Airtable record: ${recordId}`);
-    } catch (error) {
-        console.error(`Error updating Airtable: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
-}
-
-async function getClassDetails(classId) {
-    try {
-        const classRecords = await airtableBase("Biaw Classes")
-            .select({
-                filterByFormula: `{Field ID} = '${classId}'`,
-                maxRecords: 1,
-            })
-            .firstPage();
-
-        if (classRecords.length === 0) {
-            console.log(`Class record not found in Biaw Classes table for ID: ${classId}.`);
-            return null;
+        if (!id || !fields) {
+            return res.status(400).json({ message: "Invalid request data" });
         }
 
-        console.log(`Class record found for ID: ${classId}.`);
-        return classRecords[0];
-    } catch (error) {
-        console.error(`Error fetching class record: ${error.message}`);
-        console.log(classId);
+        console.log("Received refund request:", { id, fields });
 
-        return null;
-    }
-}
+        const memberId1 = fields["Field ID (from Biaw Classes)"]?.[0] || null;
+        const seatsPurchased = parseInt(fields["Number of seat Purchased"], 10) || 0;
+        const custEmail1 = fields["Email"];
 
-async function updateSeatsInClass(seatsToAdjust, classId) {
-    try {
-        const classRecord = await getClassDetails(classId);
-
-        if (classRecord) {
-            const currentRemainingSeats = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
-            const currentTotalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'], 10) || 0;
-
-            const updatedRemainingSeats = (currentRemainingSeats + seatsToAdjust).toString();
-            const updatedTotalSeats = (currentTotalPurchasedSeats - seatsToAdjust).toString();
-
-            console.log('Updating Biaw Classes:', {
-                'Number of seats remaining': updatedRemainingSeats,
-                'Total Number of Purchased Seats': updatedTotalSeats,
-            });
-
-            await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+        // Update Airtable - Refund Confirmation and Payment Status
+        try {
+            await axios.patch(`${airtableUrl}/${id}`, {
                 fields: {
-                    'Number of seats remaining': updatedRemainingSeats,
-                    'Total Number of Purchased Seats': updatedTotalSeats,
+                    "Refund Confirmation": "Confirmed",
+                    "Payment Status": "ROII-Cancelled",
+                    "Number of seat Purchased": 0,
                 },
             }, {
                 headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
             });
 
-            console.log(`Updated Biaw Classes record: ${classRecord.id}`);
-        }
-    } catch (error) {
-        console.error(`Error updating Biaw Classes: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
-}
-
-
-async function updateClassStatuses(recordId, newStatus) {
-    try {
-        const recordResponse = await axios.get(`${airtableUrl}/${recordId}`, {
-            headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-        });
-  
-        const linkedClassIds = recordResponse.data.fields["Multiple Class Registration"] || [];
-  
-        for (const classId of linkedClassIds) {
-            const classUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${classId}`;
-  
-            await axios.patch(
-                classUrl,
-                {
-                    fields: {
-                        "Payment Status": newStatus,
-                    },
-                },
-                { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
-            );
-  
-            console.log(`Updated Payment Status for Multiple Class Registration ID: ${classId}`);
-        }
-    } catch (error) {
-        console.error(`Error updating "Payment Status" for linked records: ${error.message}`);
-    }
-}
-
-async function handleRefundProcessing() {
-    const refundRequests = await getNonRefundedCancellations();
-
-    for (const record of refundRequests) {
-        // const classFieldValue = record.fields['Airtable id'];
-        const memberid2 = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
-        const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
-        const custEmail2 = record.fields['Email']
-
-         // Check if "Biaw Classes" data is available; skip if not
-         if (!memberid2 || memberid2 === "No details provided") {
-            console.log(`Skipping record ${record.id}. "Biaw Classes" data unavailable for member ID: ${memberid2}`);
-            continue;
+            console.log(`Updated Airtable payment record: ${id}`);
+        } catch (error) {
+            console.error("Error updating Airtable Payment record:", error.message);
         }
 
-        await amendAirtableRecord(record.id, {
-            'Refund Confirmation': 'Confirmed',
-            'Payment Status': 'Cancelled Without Refund',
-            'Number of seat Purchased': 0,
-        });
-
-        await updateSeatsInClass(seatsPurchased, memberid2);
-        await updateClassStatuses(record.id, 'Cancelled Without Refund');
-        if (custEmail2) {
-            const subject = 'Refund Processed Successfully';
-            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nBIAW Support`;
-
+        // Update class availability in Biaw Classes
+        if (memberId1) {
             try {
-                await transporter.sendMail({
-                    from: `"BIAW Support" <${process.env.EMAIL_USER}>`, // Sender's email address
-                    to: custEmail2, // Recipient's email address
-                    subject, // Email subject
-                    text, // Email body
+                const classRecords = await axios.get(`${biawClassesUrl}?filterByFormula={Field ID}='${memberId1}'`, {
+                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
                 });
 
-                console.log(`Email sent to ${custEmail2} for refund request ID: ${record.id}`);
+                if (classRecords.data.records.length > 0) {
+                    const classRecord = classRecords.data.records[0];
+                    const updatedRemainingSeats = (parseInt(classRecord.fields["Number of seats remaining"], 10) || 0) + seatsPurchased;
+                    const updatedTotalSeats = (parseInt(classRecord.fields["Total Number of Purchased Seats"], 10) || 0) - seatsPurchased;
+
+                    await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+                        fields: {
+                            "Number of seats remaining": updatedRemainingSeats.toString(),
+                            "Total Number of Purchased Seats": updatedTotalSeats.toString(),
+                        },
+                    }, {
+                        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                    });
+
+                    console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+                }
             } catch (error) {
-                console.error(`Error sending email to ${custEmail2}: ${error.message}`);
+                console.error("Error updating Biaw Classes record:", error.message);
             }
-        } else {
-            console.log(`No email address found for refund request ID: ${record.id}`);
         }
-    }
-}
 
+        // Update linked multiple class registrations
+        const multipleClassRegistrationIds = fields["Multiple Class Registration"] || [];
+        for (const multipleClassIdObj of multipleClassRegistrationIds) {
+            const multipleClassId = multipleClassIdObj.id || multipleClassIdObj; // Access the 'id' property if it's an object, or use the value directly
 
-const tasks = [
-    // { name: "processRefundRequests", task: processRefundRequests },
-    { name: "handleROIIProcessing", task: handleRefundProcessing },
-    // { name: "handleRefunds", task: handleRefunds },
-];
+            if (multipleClassId) {
+                try {
+                    await axios.patch(`${multipleClassRegistrationUrl}/${multipleClassId}`, {
+                        fields: { "Payment Status": "ROII-Cancelled" },
+                    }, {
+                        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                    });
 
-async function runScheduler(tasks, intervalMs) {
-    console.log("Starting unified task scheduler...");
-    setInterval(async () => {
-        for (const { name, task } of tasks) {
-            console.log(`Running task: ${name} at ${new Date().toISOString()}`);
+                    console.log(`Updated Payment Status for Multiple Class Registration ID: ${multipleClassId}`);
+                } catch (error) {
+                    console.error(`Error updating Multiple Class Registration ID: ${multipleClassId}:`, error.message);
+                }
+            }
+        }
+
+        // Send confirmation email
+        if (custEmail1) {
             try {
-                await task();
+                await transporter.sendMail({
+                    from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+                    to: custEmail1,
+                    subject: "Class Cancellation and Refund Processed Successfully",
+                    text: `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. 
+                    The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\n
+                    Thank you for your patience.\n\nBest regards,\nBIAW Support`,
+                });
+
+                console.log(`Email sent to ${custEmail1} for refund request ID: ${id}`);
             } catch (error) {
-                console.error(`Error in task ${name}:`, error.message || error);
+                console.error(`Error sending refund email to ${custEmail1}:`, error.message);
             }
         }
-    }, intervalMs);
-}
 
-runScheduler(tasks, 30000);
+        return res.status(200).json({ message: "Refund processed successfully" });
+    } catch (error) {
+        console.error("Error handling refund:", error.message);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
+
 
 
 
@@ -569,15 +674,15 @@ async function processRows() {
 }
 
 
-app.post("/api/cancelclass", (req, res) => {
-  const { id, fields } = req.body;
+// app.post("/api/cancelclass", (req, res) => {
+//   const { id, fields } = req.body;
 
-  // Log or process the received data
-  console.log("Received data:", { id, fields });
+//   // Log or process the received data
+//   console.log("Received data:", { id, fields });
 
-  // Send a response
-  res.status(200).json({ message: "Data received successfully" });
-});
+//   // Send a response
+//   res.status(200).json({ message: "Data received successfully" });
+// });
 
 
 // Run the function at regular intervals
