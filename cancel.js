@@ -276,6 +276,13 @@ const biawClassesUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Biaw Cla
 // }
 
 
+// Function to check if the Payment ID is a Stripe Payment Intent
+function isStripePayment(paymentId) {
+    return typeof paymentId === "string" && paymentId.startsWith("pi_");
+}
+
+
+
 app.post("/api/refund", async (req, res) => {
     try {
         const { id, fields } = req.body;
@@ -293,7 +300,7 @@ app.post("/api/refund", async (req, res) => {
 
         let refundSuccessful = false;
 
-        // Check if the payment ID is from Stripe
+        // Process Stripe refund if it's a Stripe payment
         if (isStripePayment(paymentIntentId)) {
             try {
                 const refund = await stripe.refunds.create({ payment_intent: paymentIntentId });
@@ -312,66 +319,82 @@ app.post("/api/refund", async (req, res) => {
         }
 
         // Update Airtable even if no Stripe refund was processed
-        await axios.patch(`${airtableUrl}/${id}`, {
-            fields: {
-                "Refund Confirmation": "Confirmed",
-                "Payment Status": "Refunded",
-                "Number of seat Purchased": 0,
-            },
-        }, {
-            headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-        });
-
-        console.log(`Updated Airtable payment record: ${id}`);
-
-        // Update class availability in Biaw Classes
-        if (memberId) {
-            const classRecords = await axios.get(`${biawClassesUrl}?filterByFormula={Field ID}='${memberId}'`, {
+        try {
+            await axios.patch(`${airtableUrl}/${id}`, {
+                fields: {
+                    "Refund Confirmation": "Confirmed",
+                    "Payment Status": "Refunded",
+                    "Number of seat Purchased": 0,
+                },
+            }, {
                 headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
             });
 
-            if (classRecords.data.records.length > 0) {
-                const classRecord = classRecords.data.records[0];
-                const updatedRemainingSeats = (parseInt(classRecord.fields["Number of seats remaining"], 10) || 0) + seatsPurchased;
-                const updatedTotalSeats = (parseInt(classRecord.fields["Total Number of Purchased Seats"], 10) || 0) - seatsPurchased;
+            console.log(`Updated Airtable payment record: ${id}`);
+        } catch (error) {
+            console.error("Error updating Airtable Payment record:", error.message);
+        }
 
-                await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
-                    fields: {
-                        "Number of seats remaining": updatedRemainingSeats.toString(),
-                        "Total Number of Purchased Seats": updatedTotalSeats.toString(),
-                    },
-                }, {
+        // Update class availability in Biaw Classes
+        if (memberId) {
+            try {
+                const classRecords = await axios.get(`${biawClassesUrl}?filterByFormula={Field ID}='${memberId}'`, {
                     headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
                 });
 
-                console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+                if (classRecords.data.records.length > 0) {
+                    const classRecord = classRecords.data.records[0];
+                    const updatedRemainingSeats = (parseInt(classRecord.fields["Number of seats remaining"], 10) || 0) + seatsPurchased;
+                    const updatedTotalSeats = (parseInt(classRecord.fields["Total Number of Purchased Seats"], 10) || 0) - seatsPurchased;
+
+                    await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+                        fields: {
+                            "Number of seats remaining": updatedRemainingSeats.toString(),
+                            "Total Number of Purchased Seats": updatedTotalSeats.toString(),
+                        },
+                    }, {
+                        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                    });
+
+                    console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+                }
+            } catch (error) {
+                console.error("Error updating Biaw Classes record:", error.message);
             }
         }
 
         // Update linked multiple class registrations
         const multipleClassRegistrationIds = fields["Multiple Class Registration"] || [];
         for (const multipleClassId of multipleClassRegistrationIds) {
-            await axios.patch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${multipleClassId}`, {
-                fields: { "Payment Status": "Refunded" },
-            }, {
-                headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-            });
+            try {
+                await axios.patch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${multipleClassId}`, {
+                    fields: { "Payment Status": "Refunded" },
+                }, {
+                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+                });
 
-            console.log(`Updated Payment Status for Multiple Class Registration ID: ${multipleClassId}`);
+                console.log(`Updated Payment Status for Multiple Class Registration ID: ${multipleClassId}`);
+            } catch (error) {
+                console.error(`Error updating Multiple Class Registration ID: ${multipleClassId}:`, error.message);
+            }
         }
 
         // Send confirmation email
         if (custEmail) {
-            await transporter.sendMail({
-                from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
-                to: custEmail,
-                subject: "Refund Processed Successfully",
-                text: `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. 
-                The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\n
-                Thank you for your patience.\n\nBest regards,\nBIAW Support`,
-            });
+            try {
+                await transporter.sendMail({
+                    from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+                    to: custEmail,
+                    subject: "Refund Processed Successfully",
+                    text: `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. 
+                    The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\n
+                    Thank you for your patience.\n\nBest regards,\nBIAW Support`,
+                });
 
-            console.log(`Email sent to ${custEmail} for refund request ID: ${id}`);
+                console.log(`Email sent to ${custEmail} for refund request ID: ${id}`);
+            } catch (error) {
+                console.error(`Error sending refund email to ${custEmail}:`, error.message);
+            }
         }
 
         return res.status(200).json({ message: "Refund processed successfully" });
@@ -380,6 +403,7 @@ app.post("/api/refund", async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 });
+
 
 // app.post("/api/refund", (req, res) => {
 //   const { id, fields } = req.body;
