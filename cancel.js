@@ -224,6 +224,12 @@ async function handleRefunds() {
             continue;
         }
 
+        // Check if "Biaw Classes" data is available; skip if not
+        if (!memberid || memberid === "No details provided") {
+            console.log(`Skipping record ${record.id}. "Biaw Classes" data unavailable for member ID: ${memberid}`);
+            continue;
+        }
+
         if (paymentIntentId) {
             const refund = await processRefund(paymentIntentId);
 
@@ -268,6 +274,7 @@ async function handleRefunds() {
         }
     }
 }
+
 
 
 
@@ -417,6 +424,11 @@ async function processRefundRequests() {
 
         const customerEmail = record.fields['Email']; // Assume the email field exists in Airtable
 
+         // Check if "Biaw Classes" data is available; skip if not
+         if (!memberid1 || memberid1 === "No details provided") {
+            console.log(`Skipping record ${record.id}. "Biaw Classes" data unavailable for member ID: ${memberid1}`);
+            continue;
+        }
         // Update refund confirmation and payment status
         await modifyAirtableRecord(record.id, {
             'Refund Confirmation': 'Confirmed',
@@ -593,6 +605,12 @@ async function handleRefundProcessing() {
         const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
         const custEmail2 = record.fields['Email']
 
+         // Check if "Biaw Classes" data is available; skip if not
+         if (!memberid2 || memberid2 === "No details provided") {
+            console.log(`Skipping record ${record.id}. "Biaw Classes" data unavailable for member ID: ${memberid2}`);
+            continue;
+        }
+
         await amendAirtableRecord(record.id, {
             'Refund Confirmation': 'Confirmed',
             'Payment Status': 'Cancelled Without Refund',
@@ -656,7 +674,7 @@ async function processRows() {
     // Fetch records where "Publish / Unpublish" field is "Update"
     const records = await base(AIRTABLE_TABLE_NAME)
       .select({
-        filterByFormula: `{Publish / Unpublish} = "Update"`, // Filter condition
+        filterByFormula: `{Seat addition status} = "Update"`, 
       })
       .all();
 
@@ -687,7 +705,7 @@ async function processRows() {
             'Number of seats remaining': String(newRemainingSeats), // Convert number to string
             'Additional seat': "0", // Reset to default
             'Reduce Seat': "0", // Reset to default
-            'Publish / Unpublish': "Updated" // Mark as updated
+            'Seat addition status': "Updated" // Mark as updated
           });
 
           console.log(`Record updated successfully: ${recordId}`);
@@ -1013,7 +1031,7 @@ async function processPayments1() {
                 const publishStatus2 = linkedClass.get('Publish / Unpublish');
 
                 // Handle rejection cases
-                if (seatsRemaining2 <= 0 || publishStatus2 === "Deleted") {
+                if (seatsRemaining2 <= 0 || publishStatus2 === "Deleted" || seatsPurchased > seatsRemaining2) {
                     if (currentBookingStatus !== "Rejected") {
                         console.log(
                             `Marking record as Rejected due to no seats or class deletion. Record ID: ${record.id}`
