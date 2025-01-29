@@ -255,7 +255,7 @@ async function handleRefunds() {
 
         if (custEmail) {
             const subject = 'Refund Processed Successfully';
-            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nYour Team`;
+            const text = `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\nThank you for your patience.\n\nBest regards,\nBIAW Support`;
 
             try {
                 await transporter.sendMail({
@@ -757,7 +757,6 @@ async function processPayments() {
                 filterByFormula: `AND(
                     {Booking Type} = "Admin booked",
                     {Payment Status} = "Paid",
-                    {Self Purchase} = "",
                     {Member ID (from User ID)} != "",
                     {Biaw Classes} != "",
                     {Email} != "",
@@ -769,6 +768,7 @@ async function processPayments() {
                 )`
             })
             .all();
+                    // {Self Purchase} = "",
 
         if (records.length === 0) {
             console.log("No records found matching the filter.");
@@ -829,8 +829,6 @@ async function processPayments() {
 Dear ${name},
 
 We regret to inform you that your booking for the class could not be processed due to either unavailability of seats, the cancellation of the class, or the requested seats exceeding the available seats.
-
-We will let you know when seats are available.
 
 We sincerely apologize for any inconvenience this may have caused and appreciate your understanding. Please feel free to contact our support team if you have any questions or require further assistance.
 
@@ -1048,8 +1046,6 @@ async function processPayments1() {
 Dear ${name},
 
 We regret to inform you that your booking for the class could not be processed due to either unavailability of seats or the cancellation of the class.
-
-We will let you know when seats are available 
 
 We sincerely apologize for any inconvenience this may have caused and appreciate your understanding. Please feel free to contact our support team if you have any questions or require further assistance.
 
