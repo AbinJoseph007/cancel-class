@@ -276,6 +276,16 @@ async function handleRefunds() {
 }
 
 
+app.post("/api/refund", (req, res) => {
+  const { id, fields } = req.body;
+
+  // Log or process the received data
+  console.log("Received data:", { id, fields });
+
+  // Send a response
+  res.status(200).json({ message: "Data received successfully" });
+});
+
 
 
 //function  ROII cancelled
