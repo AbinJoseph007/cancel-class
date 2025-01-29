@@ -674,7 +674,7 @@ async function processRows() {
     // Fetch records where "Publish / Unpublish" field is "Update"
     const records = await base(AIRTABLE_TABLE_NAME)
       .select({
-        filterByFormula: `{Seat addition status} = "Update"`, 
+        filterByFormula: `{Seat addition status} = "Updated"`, 
       })
       .all();
 
@@ -705,7 +705,7 @@ async function processRows() {
             'Number of seats remaining': String(newRemainingSeats), // Convert number to string
             'Additional seat': "0", // Reset to default
             'Reduce Seat': "0", // Reset to default
-            'Seat addition status': "Updated" // Mark as updated
+            'Seat addition status': "Publish" // Mark as updated
           });
 
           console.log(`Record updated successfully: ${recordId}`);
