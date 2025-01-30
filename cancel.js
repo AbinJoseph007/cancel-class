@@ -183,7 +183,7 @@ app.post("/api/refund", async (req, res) => {
 We hope this email finds you well.<br><br>
                 
 We would like to inform you that your refund request for the class <b>${classname}</b> and ${seatsPurchased} seat(s) has been successfully processed. 
-The payment status for your purchase has been updated, and the refund has been confirmed.<br><br>
+The payment status for your purchase has been updated, and the refund has been confirmed.<br><br> Please allow 15 business days for the refund to reflect in your account, depending on your payment provider.
                 
 If you have any questions or need further assistance, please do not hesitate to contact our support team.<br><br>
                 
