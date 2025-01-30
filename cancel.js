@@ -180,16 +180,16 @@ app.post("/api/refund", async (req, res) => {
                     subject: `Class Cancellation and refund Processed Successfully for ${classname}`,
                     text: `Dear ${uername},
                 
-                We hope this email finds you well.
+We hope this email finds you well.
                 
-                We would like to inform you that your refund request for the class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
-                The payment status for your purchase has been updated and the refund has been confirmed.
+We would like to inform you that your refund request for the class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
+The payment status for your purchase has been updated and the refund has been confirmed.
 
                 
-                If you have any questions or need further assistance, please do not hesitate to contact our support team.
+If you have any questions or need further assistance, please do not hesitate to contact our support team.
                 
-                Best regards,  
-                BIAW Support`
+Best regards,  
+BIAW Support`
                 });   
 
                 console.log(`Email sent to ${custEmail} for refund request ID: ${id}`);
@@ -300,15 +300,15 @@ app.post("/api/roiicancel", async (req, res) => {
                     subject: `Class Cancellation Processed Successfully for ${classname}`,
                     text: `Dear ${uername},
                 
-                We hope this email finds you well.
+We hope this email finds you well.
                 
-                We would like to inform you that your cancel request for class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
-                The confirmation status for your class has been updated
+We would like to inform you that your cancel request for class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
+The confirmation status for your class has been updated
                 
-                If you have any questions or need further assistance, please do not hesitate to contact our support team.
+If you have any questions or need further assistance, please do not hesitate to contact our support team.
                 
-                Best regards,  
-                BIAW Support`
+Best regards,  
+BIAW Support`
                 });                
 
                 console.log(`Email sent to ${custEmail} for refund request ID: ${id}`);
@@ -415,15 +415,15 @@ app.post("/api/without", async (req, res) => {
                     subject: `Class Cancellation Processed Successfully for ${classname}`,
                     text: `Dear ${uername},
                 
-                We hope this email finds you well.
+We hope this email finds you well.
                 
-                We would like to inform you that your cancel request for class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
-                The confirmation status for your class has been updated
+We would like to inform you that your cancel request for class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
+The confirmation status for your class has been updated
                 
-                If you have any questions or need further assistance, please do not hesitate to contact our support team.
+If you have any questions or need further assistance, please do not hesitate to contact our support team.
                 
-                Best regards,  
-                BIAW Support`
+Best regards,  
+BIAW Support`
                 });   
 
                 console.log(`Email sent to ${custEmail1} for refund request ID: ${id}`);
