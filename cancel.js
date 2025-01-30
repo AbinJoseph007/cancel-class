@@ -81,6 +81,9 @@ app.post("/api/refund", async (req, res) => {
         const memberId = fields["Field ID (from Biaw Classes)"]?.[0] || null;
         const seatsPurchased = parseInt(fields["Number of seat Purchased"], 10) || 0;
         const custEmail = fields["Email"];
+        const uername = fields["Name"];
+        const classname = fields["Name (from Biaw Classes)"]?.[0] || null
+
 
         let refundSuccessful = false;
 
@@ -174,11 +177,20 @@ app.post("/api/refund", async (req, res) => {
                 await transporter.sendMail({
                     from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
                     to: custEmail,
-                    subject: "Refund Processed Successfully",
-                    text: `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. 
-                    The payment status for your purchase has been updated to 'Refunded', and the refund has been confirmed.\n\n
-                    Thank you for your patience.\n\nBest regards,\nBIAW Support`,
-                });
+                    subject: `Class Cancellation and refund Processed Successfully for ${classname}`,
+                    text: `Dear ${uername},
+                
+                We hope this email finds you well.
+                
+                We would like to inform you that your refund request for the class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
+                The payment status for your purchase has been updated and the refund has been confirmed.
+
+                
+                If you have any questions or need further assistance, please do not hesitate to contact our support team.
+                
+                Best regards,  
+                BIAW Support`
+                });   
 
                 console.log(`Email sent to ${custEmail} for refund request ID: ${id}`);
             } catch (error) {
@@ -210,6 +222,9 @@ app.post("/api/roiicancel", async (req, res) => {
         const memberId = fields["Field ID (from Biaw Classes)"]?.[0] || null;
         const seatsPurchased = parseInt(fields["Number of seat Purchased"], 10) || 0;
         const custEmail = fields["Email"];
+        const uername = fields["Name"];
+        const classname = fields["Name (from Biaw Classes)"]?.[0] || null
+
 
         // Update Airtable - Refund Confirmation and Payment Status
         try {
@@ -282,11 +297,19 @@ app.post("/api/roiicancel", async (req, res) => {
                 await transporter.sendMail({
                     from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
                     to: custEmail,
-                    subject: "Class Cancellation and Refund Processed Successfully",
-                    text: `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. 
-                    The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\n
-                    Thank you for your patience.\n\nBest regards,\nBIAW Support`,
-                });
+                    subject: `Class Cancellation Processed Successfully for ${classname}`,
+                    text: `Dear ${uername},
+                
+                We hope this email finds you well.
+                
+                We would like to inform you that your cancel request for class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
+                The confirmation status for your class has been updated
+                
+                If you have any questions or need further assistance, please do not hesitate to contact our support team.
+                
+                Best regards,  
+                BIAW Support`
+                });                
 
                 console.log(`Email sent to ${custEmail} for refund request ID: ${id}`);
             } catch (error) {
@@ -315,6 +338,8 @@ app.post("/api/without", async (req, res) => {
         const memberId1 = fields["Field ID (from Biaw Classes)"]?.[0] || null;
         const seatsPurchased = parseInt(fields["Number of seat Purchased"], 10) || 0;
         const custEmail1 = fields["Email"];
+        const uername = fields["Name"];
+        const classname = fields["Name (from Biaw Classes)"]?.[0] || null
 
         // Update Airtable - Refund Confirmation and Payment Status
         try {
@@ -387,11 +412,19 @@ app.post("/api/without", async (req, res) => {
                 await transporter.sendMail({
                     from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
                     to: custEmail1,
-                    subject: "Class Cancellation and Refund Processed Successfully",
-                    text: `Dear Customer,\n\nYour refund request for ${seatsPurchased} seat(s) has been successfully processed. 
-                    The payment status for your purchase has been updated to 'ROII-Cancelled', and the refund has been confirmed.\n\n
-                    Thank you for your patience.\n\nBest regards,\nBIAW Support`,
-                });
+                    subject: `Class Cancellation Processed Successfully for ${classname}`,
+                    text: `Dear ${uername},
+                
+                We hope this email finds you well.
+                
+                We would like to inform you that your cancel request for class ${classname} ${seatsPurchased} seat(s) has been successfully processed. 
+                The confirmation status for your class has been updated
+                
+                If you have any questions or need further assistance, please do not hesitate to contact our support team.
+                
+                Best regards,  
+                BIAW Support`
+                });   
 
                 console.log(`Email sent to ${custEmail1} for refund request ID: ${id}`);
             } catch (error) {
